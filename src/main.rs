@@ -1,4 +1,4 @@
-use sillygen::{
+use mecha::{
     error_report::{report_lexer_error, report_parser_error},
     lexer::{Lexeme, Lexer, Token},
     parser::Parser,
