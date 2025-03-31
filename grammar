@@ -1,0 +1,23 @@
+statement      → return
+return         → "return" expression ";"
+
+expression     → if
+
+if             → "if" "(" equality ")" block
+if             → equality
+
+equality       → comparison ( "!=" | "==" ) equality 
+comparison     → term ( ">" | ">=" | "<" | "<=") comparison 
+
+term           → factor ( "-" | "+" ) term 
+factor         → unary ( "/" | "*" ) factor
+
+unary          → ( "!" | "-" ) unary
+unary          → primary
+
+primary        → terminal
+primary        → "(" expression ")"
+primary        → block
+
+terminal       → NUMBER | STRING | "true" | "false" | "nil"
+block          → "{" (statement)* (expression)? "}"
