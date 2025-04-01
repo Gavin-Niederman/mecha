@@ -47,7 +47,7 @@ impl<'a> Parser<'a> {
     #[inline]
     fn skip_whitespace_lexemes(&mut self) {
         while let Some(Lexeme {
-            value: Token::WhiteSpace | Token::Eoi,
+            value: Token::WhiteSpace,
             ..
         }) = self.lexemes.get(self.location)
         {

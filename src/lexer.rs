@@ -28,86 +28,137 @@ macro_rules! char_token {
     };
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Token {
-    WhiteSpace,
+macro_rules! token_type {
+    {
+        $(#[$meta:meta])*
+        $vis:vis enum $ident:ident {
+            $(
+                #[text = $textual:expr]
+                $variant:ident
+            ),* $(,)?
+        }
+    } => {
+        $(#[$meta])*
+        $vis enum $ident {
+            $(
+                $variant
+            ),*
+        }
 
-    Float,
-    Integer,
+        impl $ident {
+            fn next_in_priority(&self) -> Option<$ident> {
+                __token_type_prio!(@start self $($variant),*)
+            }
+        }
 
-    True,
-    False,
-    Nil,
-
-    LeftParen,
-    RightParen,
-    LeftBrace,
-    RightBrace,
-
-    Colon,
-    Semicolon,
-
-    Plus,
-    Minus,
-    Star,
-    Slash,
-
-    Bang,
-
-    Equal,
-    NotEqual,
-    LessThan,
-    LessThanOrEqual,
-    GreaterThan,
-    GreaterThanOrEqual,
-
-    If,
-
-    Identifier,
-
-    Eoi,
+        impl Display for $ident {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    $(
+                        $ident::$variant => write!(f, $textual),
+                    )*
+                }
+            }
+        }
+    };
 }
-impl Token {
-    fn next_in_priority(&self) -> Option<Token> {
-        match self {
-            Self::WhiteSpace => Some(Self::Float),
 
-            Self::Float => Some(Self::Integer),
-            Self::Integer => Some(Self::True),
-
-            Self::True => Some(Self::False),
-            Self::False => Some(Self::Nil),
-            Self::Nil => Some(Self::LeftParen),
-
-            Self::LeftParen => Some(Self::RightParen),
-            Self::RightParen => Some(Self::LeftBrace),
-            Self::LeftBrace => Some(Self::RightBrace),
-            Self::RightBrace => Some(Self::Colon),
-
-            Self::Colon => Some(Self::Semicolon),
-            Self::Semicolon => Some(Self::Plus),
-
-            Self::Plus => Some(Self::Minus),
-            Self::Minus => Some(Self::Star),
-            Self::Star => Some(Self::Slash),
-            Self::Slash => Some(Self::Bang),
-
-            Self::Bang => Some(Self::Equal),
-
-            Self::Equal => Some(Self::NotEqual),
-            Self::NotEqual => Some(Self::LessThan),
-            Self::LessThan => Some(Self::LessThanOrEqual),
-            Self::LessThanOrEqual => Some(Self::GreaterThan),
-            Self::GreaterThan => Some(Self::GreaterThanOrEqual),
-            Self::GreaterThanOrEqual => Some(Self::If),
-
-            Self::If => Some(Self::Identifier),
-
-            Self::Identifier => Some(Self::Eoi),
-            Self::Eoi => None,
+// An absolutely disgusting macro that builds a priority list for the tokens.
+// If the token enum contains the following variants:
+// A, B, C, D, E
+// Then the macro will build a priority list like this:
+// A => Some(B), B => Some(C), C => Some(D), D => Some(E), E => None
+//
+// Maintaining this will be my personal hell
+macro_rules! __token_type_prio {
+    (@start $self:ident $($item:ident),*) => {
+        __token_type_prio!(@build $self [] $($item),*)
+    };
+    (@build $self:ident [ $($built:ident => $builtsec:expr),* ] $first:ident, $sec:ident, $($rest:ident),*) => {
+        __token_type_prio!(@build $self [ $($built => $builtsec,)* $first => Some(Self::$sec) ] $sec, $($rest),*)
+    };
+    (@build $self:ident [ $($built:ident => $builtsec:expr),* ] $first:ident, $sec:ident) => {
+        __token_type_prio!(@build $self [ $($built => $builtsec,)* $first => Some(Self::$sec) ] $sec)
+    };
+    (@build $self:ident [ $($built:ident => $builtsec:expr),* ] $first:ident) => {
+        __token_type_prio!(@build $self [ $($built => $builtsec,)* $first => None ])
+    };
+    (@build $self:ident [ $($built:ident => $builtsec:expr),* ]) => {
+        match $self {
+            $(Self::$built => $builtsec,)*
         }
     }
+}
 
+token_type! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum Token {
+        #[text = "WHITESPACE"]
+        WhiteSpace,
+
+        #[text = "FLOAT"]
+        Float,
+        #[text = "INTEGER"]
+        Integer,
+
+        #[text = "'true'"]
+        True,
+        #[text = "'false'"]
+        False,
+        #[text = "'nil'"]
+        Nil,
+
+        #[text = "'('"]
+        LeftParen,
+        #[text = "')'"]
+        RightParen,
+        #[text = "'{{'"]
+        LeftBrace,
+        #[text = "'}}'"]
+        RightBrace,
+
+        #[text = "':'"]
+        Colon,
+        #[text = "';'"]
+        Semicolon,
+
+        #[text = "'+'"]
+        Plus,
+        #[text = "'-'"]
+        Minus,
+        #[text = "'*'"]
+        Star,
+        #[text = "'/'"]
+        Slash,
+
+        #[text = "'=='"]
+        Equal,
+        #[text = "'!='"]
+        NotEqual,
+        #[text = "'<'"]
+        LessThan,
+        #[text = "'<='"]
+        LessThanOrEqual,
+        #[text = "'>'"]
+        GreaterThan,
+        #[text = "'>='"]
+        GreaterThanOrEqual,
+
+        #[text = "'!'"]
+        Bang,
+
+        #[text = "'if'"]
+        If,
+
+        #[text = "'IDENTIFIER'"]
+        Identifier,
+
+        #[text = "'EOI'"]
+        Eoi,
+    }
+}
+
+impl Token {
     /// Checks whether the given token is satisfied by the given text.
     ///
     /// # Returns
@@ -249,39 +300,6 @@ impl Token {
     }
 }
 
-impl Display for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Token::WhiteSpace => write!(f, "WHITESPACE"),
-            Token::Float => write!(f, "FLOAT"),
-            Token::Integer => write!(f, "INTEGER"),
-            Token::True => write!(f, "'true'"),
-            Token::False => write!(f, "'false'"),
-            Token::Nil => write!(f, "'nil'"),
-            Token::LeftParen => write!(f, "'('"),
-            Token::RightParen => write!(f, "')'"),
-            Token::LeftBrace => write!(f, "'{{'"),
-            Token::RightBrace => write!(f, "'}}'"),
-            Token::Colon => write!(f, "':'"),
-            Token::Semicolon => write!(f, "';'"),
-            Token::Plus => write!(f, "'+'"),
-            Token::Minus => write!(f, "'-'"),
-            Token::Star => write!(f, "'*'"),
-            Token::Slash => write!(f, "'/'"),
-            Token::Bang => write!(f, "'!'"),
-            Token::Equal => write!(f, "'=='"),
-            Token::NotEqual => write!(f, "'!='"),
-            Token::LessThan => write!(f, "'<'"),
-            Token::LessThanOrEqual => write!(f, "'<='"),
-            Token::GreaterThan => write!(f, "'>'"),
-            Token::GreaterThanOrEqual => write!(f, "'>='"),
-            Token::If => write!(f, "'if'"),
-            Token::Identifier => write!(f, "IDENTIFIER"),
-            Token::Eoi => write!(f, "EOI"),
-        }
-    }
-}
-
 pub type Lexeme = Spanned<Token>;
 
 #[derive(Debug, Clone)]
@@ -299,10 +317,10 @@ impl Lexer<'_> {
         let mut matching_token = Token::WhiteSpace;
 
         loop {
-            let text = &self.input[self.position..];
-            if text.is_empty() {
+            if self.position >= self.input.len() {
                 return Ok(Lexeme::new(self.position..self.position, Token::Eoi));
             }
+            let text = &self.input[self.position..];
 
             match matching_token.satisfied_by(text) {
                 Some(consumed) => {
@@ -319,6 +337,23 @@ impl Lexer<'_> {
                 }
             }
         }
+    }
+
+    pub fn collect(&mut self) -> Result<Vec<Lexeme>, LexerError> {
+        let mut lexemes = Vec::new();
+        loop {
+            match self.next_lexeme()? {
+                lexeme @ Lexeme {
+                    value: Token::Eoi, ..
+                } => {
+                    lexemes.push(lexeme);
+                    break;
+                }
+                lexeme => lexemes.push(lexeme),
+            }
+        }
+
+        Ok(lexemes)
     }
 
     #[inline]

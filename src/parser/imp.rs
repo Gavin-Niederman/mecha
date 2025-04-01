@@ -1,7 +1,4 @@
-use crate::{
-    Spanned,
-    lexer::{Lexeme, Token},
-};
+use crate::lexer::{Lexeme, Token};
 
 use super::{
     ParseError, ParseResult, Parser,
@@ -140,35 +137,19 @@ impl Parser<'_> {
     }
 
     pub(super) fn parse_unary(&mut self) -> ParseResult<Expr> {
-        let lexeme = self.peek_lexeme().cloned();
+        let Ok(operator) = self.parse_operator(&[Token::Bang, Token::Minus]) else {
+            return self.parse_primary();
+        };
 
-        match lexeme {
-            Some(
-                lexeme @ Lexeme {
-                    value: Token::Bang | Token::Minus,
-                    ..
-                },
-            ) => {
-                // Peeked lexeme used
-                self.advance_lexeme();
+        let rhs = self.parse_unary()?;
 
-                let operator = Spanned::new(lexeme.span.clone(), lexeme.value.try_into().unwrap());
-
-                let rhs = self.parse_unary()?;
-
-                Ok(Expr {
-                    span: lexeme.span.start..rhs.span.end,
-                    value: ExprType::Unary {
-                        operator,
-                        rhs: Box::new(rhs),
-                    },
-                })
-            }
-            Some(_) => self.parse_primary(),
-            None => Err(ParseError::UnexpectedEndOfInput {
-                lexeme: self.lexemes[self.location - 1].clone(),
-            }),
-        }
+        Ok(Expr {
+            span: operator.span.start..rhs.span.end,
+            value: ExprType::Unary {
+                operator,
+                rhs: Box::new(rhs),
+            },
+        })
     }
 
     pub(super) fn parse_primary(&mut self) -> ParseResult<Expr> {
@@ -329,5 +310,59 @@ impl Parser<'_> {
                 lexeme: self.lexemes[self.location - 1].clone(),
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{lexer::Lexer, parser::{ast::{Expr, ExprType}, ParseError, Parser}};
+
+    fn lex_and_parse(input: &str) -> Result<Expr, ParseError> {
+        let mut lexer = Lexer::new(input);
+        let lexemes = lexer.collect().unwrap();
+
+        let mut parser = Parser::new(&lexemes, input);
+        parser.parse()
+    }
+
+
+    #[test]
+    fn parse_if() {
+        let input = "if (1==1) { 1; 1 }";
+        let ast = lex_and_parse(input).unwrap();
+        assert!(matches!(ast.value, ExprType::If { .. }));
+    }
+
+    #[test]
+    fn parse_if_missing_paren() {
+        let input = "if 1==1 { 1; 1 }";
+        let ast = lex_and_parse(input);
+        assert!(matches!(ast, Err(ParseError::IfConditionLackingParens { .. })));
+    }
+
+    #[test]
+    fn parse_equality() {
+        let input = "1==1";
+        let ast = lex_and_parse(input).unwrap();
+        assert!(matches!(ast.value, ExprType::Equality { .. }));
+        let input = "1!=1";
+        let ast = lex_and_parse(input).unwrap();
+        assert!(matches!(ast.value, ExprType::Equality { .. }));
+    }
+
+    #[test]
+    fn parse_comparison() {
+        let input = "1>1";
+        let ast = lex_and_parse(input).unwrap();
+        assert!(matches!(ast.value, ExprType::Comparison { .. }));
+        let input = "1>=1";
+        let ast = lex_and_parse(input).unwrap();
+        assert!(matches!(ast.value, ExprType::Comparison { .. }));
+        let input = "1<1";
+        let ast = lex_and_parse(input).unwrap();
+        assert!(matches!(ast.value, ExprType::Comparison { .. }));
+        let input = "1<=1";
+        let ast = lex_and_parse(input).unwrap();
+        assert!(matches!(ast.value, ExprType::Comparison { .. }));
     }
 }

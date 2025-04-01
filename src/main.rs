@@ -1,11 +1,11 @@
 use mecha::{
     error_report::{report_lexer_error, report_parser_error},
-    lexer::{Lexeme, Lexer, Token},
+    lexer::Lexer,
     parser::Parser,
 };
 
 fn main() {
-    let input = "if (1*(1+1) / 4 == (4.2-2) / 4) {
+    let input = "if (1*(1+1) / 4 >= (4.2-2) / 4) {
         if (true) {
         };
 
@@ -13,24 +13,14 @@ fn main() {
     }";
 
     let mut lexer = Lexer::new(input);
-    let mut lexemes = Vec::new();
-    loop {
-        match lexer.next_lexeme() {
-            Ok(
-                lexeme @ Lexeme {
-                    value: Token::Eoi, ..
-                },
-            ) => {
-                lexemes.push(lexeme);
-                break;
-            }
-            Ok(lexeme) => lexemes.push(lexeme),
-            Err(e) => {
-                report_lexer_error(input, e);
-                return;
-            }
+    let lexemes = match lexer.collect() {
+        Ok(lexemes) => lexemes,
+        Err(e) => {
+            report_lexer_error(input, e);
+            return;
         }
-    }
+    };
+
     let mut parser = Parser::new(&lexemes, input);
     match parser.parse() {
         Ok(ast) => println!("{ast:?}"),
