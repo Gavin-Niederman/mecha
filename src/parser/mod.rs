@@ -3,7 +3,7 @@ mod imp;
 
 use std::fmt::Debug;
 
-use ast::Expr;
+pub use ast::*;
 use snafu::Snafu;
 
 use crate::{
@@ -26,22 +26,32 @@ impl<'a> Parser<'a> {
             location: 0,
         }
     }
-    pub fn parse(&mut self) -> ParseResult<Expr> {
-        //TODO: panic mode for multiple errors
-        let expr = self.parse_if()?;
+    pub fn parse(&mut self) -> ParseResult<Ast> {
+        let mut statements = vec![];
 
-        let eoi = self.lexemes.get(self.location);
-        let Some(Lexeme {
-            value: Token::Eoi, ..
-        }) = eoi
-        else {
-            return Err(ParseError::UnexpectedLexeme {
-                unexpected_lexeme: eoi.unwrap_or(self.lexemes.last().unwrap()).clone(),
-                possible_tokens: vec![Token::Eoi],
-            });
-        };
+        loop {
+            let location = self.location;
+            let statement = self.parse_statement();
 
-        Ok(expr)
+            match statement {
+                Ok(statement) => {
+                    statements.push(statement);
+                }
+                Err(e) => {
+                    let eoi = self.lexemes.get(location);
+                    let Some(Lexeme {
+                        value: Token::Eoi, ..
+                    }) = eoi
+                    else {
+                        return Err(e);
+                    };
+
+                    break;
+                }
+            }
+        }
+
+        Ok(statements)
     }
 
     #[inline]
@@ -94,7 +104,7 @@ impl<'a> Parser<'a> {
             Some(lexeme @ Lexeme { value, .. }) if value == token => {
                 self.location += 1;
                 Ok(lexeme)
-            },
+            }
             Some(lexeme) => Err(ParseError::UnexpectedLexeme {
                 unexpected_lexeme: lexeme.clone(),
                 possible_tokens: vec![token],
@@ -105,7 +115,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_operator<O: TryFrom<Token>>(&mut self, allowed_tokens: &[Token]) -> ParseResult<Spanned<O>> where O::Error: Debug {
+    fn parse_operator<O: TryFrom<Token>>(
+        &mut self,
+        allowed_tokens: &[Token],
+    ) -> ParseResult<Spanned<O>>
+    where
+        O::Error: Debug,
+    {
         let lexeme = self.peek_lexeme().cloned();
 
         match lexeme {

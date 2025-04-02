@@ -7,7 +7,7 @@ use super::{
 
 impl Parser<'_> {
     pub(super) fn parse_statement(&mut self) -> ParseResult<Statement> {
-        let expr = self.parse_if()?;
+        let expr = self.parse_expr()?;
         let semicolon = self
             .consume_lexeme_of_type(&[Token::Semicolon])
             .ok_or_else(|| ParseError::MissingSemicolon {
@@ -19,6 +19,11 @@ impl Parser<'_> {
             span: expr.span.start..semicolon.span.end,
             value: StatementType::DevaluedExpr { expr },
         })
+    }
+
+    #[inline]
+    pub(super) fn parse_expr(&mut self) -> ParseResult<Expr> {
+        self.parse_if()
     }
 
     pub(super) fn parse_if(&mut self) -> ParseResult<Expr> {
@@ -202,7 +207,7 @@ impl Parser<'_> {
             });
         };
 
-        let expr = self.parse_if()?;
+        let expr = self.parse_expr()?;
 
         let paren_close = self
             .consume_lexeme_of_type(&[Token::RightParen])
@@ -251,7 +256,7 @@ impl Parser<'_> {
                             }
 
                             self.location = current_location;
-                            let expr = self.parse_if();
+                            let expr = self.parse_expr();
                             if let Ok(expr) = expr {
                                 items.push(BlockItem::Expr(expr));
                                 continue;
@@ -322,7 +327,7 @@ mod tests {
         let lexemes = lexer.collect().unwrap();
 
         let mut parser = Parser::new(&lexemes, input);
-        parser.parse()
+        parser.parse_expr()
     }
 
 

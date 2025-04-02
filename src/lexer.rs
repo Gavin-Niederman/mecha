@@ -131,18 +131,18 @@ token_type! {
         #[text = "'/'"]
         Slash,
 
-        #[text = "'=='"]
-        Equal,
-        #[text = "'!='"]
-        NotEqual,
-        #[text = "'<'"]
-        LessThan,
+        #[text = "'>='"]
+        GreaterThanOrEqual,
         #[text = "'<='"]
         LessThanOrEqual,
         #[text = "'>'"]
         GreaterThan,
-        #[text = "'>='"]
-        GreaterThanOrEqual,
+        #[text = "'<'"]
+        LessThan,
+        #[text = "'=='"]
+        Equal,
+        #[text = "'!='"]
+        NotEqual,
 
         #[text = "'!'"]
         Bang,

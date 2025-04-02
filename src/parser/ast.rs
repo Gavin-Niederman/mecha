@@ -1,5 +1,7 @@
 use crate::{Spanned, lexer::Token};
 
+pub type Ast = Vec<Statement>;
+
 pub type Statement = Spanned<StatementType>;
 
 #[derive(Debug, Clone, PartialEq)]
