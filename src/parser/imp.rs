@@ -1,24 +1,74 @@
-use crate::lexer::{Lexeme, Token};
+use crate::{
+    Span, Spanned,
+    lexer::{Lexeme, Token},
+};
 
 use super::{
-    ParseError, ParseResult, Parser,
+    Identifier, ParseError, ParseResult, Parser,
     ast::{Expr, ExprType, Statement, StatementType, Terminal},
 };
 
 impl Parser<'_> {
     pub(super) fn parse_statement(&mut self) -> ParseResult<Statement> {
-        let expr = self.parse_expr()?;
-        let semicolon = self
-            .consume_lexeme_of_type(&[Token::Semicolon])
-            .ok_or_else(|| ParseError::MissingSemicolon {
-                statement_span: expr.span.clone(),
-                expected_semicolon_at: expr.span.end,
-            })?;
+        fn parse_semicolon(parser: &mut Parser, statement_span: Span) -> ParseResult<Lexeme> {
+            parser
+                .consume_lexeme_of_type(&[Token::Semicolon])
+                .cloned()
+                .ok_or_else(|| ParseError::MissingSemicolon {
+                    statement_span: statement_span.clone(),
+                    expected_semicolon_at: statement_span.end,
+                })
+        }
 
-        Ok(Statement {
-            span: expr.span.start..semicolon.span.end,
-            value: StatementType::DevaluedExpr { expr },
-        })
+        match self.consume_lexeme_of_type(&[Token::Let, Token::Return]).cloned() {
+            Some(let_lexeme @ Lexeme {
+                value: Token::Let, ..
+            }) => {
+                let ident = self.require_token(Token::Identifier)?;
+                let ident = Spanned {
+                    span: ident.span.clone(),
+                    value: Identifier {
+                        ident: self.text[ident.span.clone()].to_string(),
+                    },
+                };
+
+                self.require_token(Token::Equal)?;
+
+                let value = self.parse_expr()?;
+                let semicolon = parse_semicolon(self, let_lexeme.span.start..value.span.end)?;
+
+                Ok(Statement {
+                    span: let_lexeme.span.start..semicolon.span.end,
+                    value: StatementType::Decleration {
+                        ident,
+                        value,
+                    },
+                })
+            }
+            Some(return_lexeme @ Lexeme {
+                value: Token::Return,
+                ..
+            }) => {
+                let expr = self.parse_expr()?;
+                let semicolon = parse_semicolon(self, return_lexeme.span.start..expr.span.end)?;
+
+                Ok(Statement {
+                    span: return_lexeme.span.start..semicolon.span.end,
+                    value: StatementType::Return{
+                        expr,
+                    },
+                })
+            },
+            Some(_) => unreachable!(),
+            None => {
+                let expr = self.parse_expr()?;
+                let semicolon = parse_semicolon(self, expr.span.clone())?;
+                Ok(Statement {
+                    span: expr.span.start..semicolon.span.end,
+                    value: StatementType::DevaluedExpr { expr },
+                })
+            }
+        }
     }
 
     #[inline]
@@ -63,7 +113,7 @@ impl Parser<'_> {
     pub(super) fn parse_equality(&mut self) -> ParseResult<Expr> {
         let lhs = self.parse_comparison()?;
 
-        let Ok(operator) = self.parse_operator(&[Token::Equal, Token::NotEqual]) else {
+        let Ok(operator) = self.parse_operator(&[Token::Equality, Token::NotEquality]) else {
             return Ok(lhs);
         };
 
@@ -183,6 +233,9 @@ impl Parser<'_> {
             Token::False => Terminal::Boolean(false),
             Token::Float => Terminal::Float(self.text[lexeme.span.clone()].parse().unwrap()),
             Token::Integer => Terminal::Integer(self.text[lexeme.span.clone()].parse().unwrap()),
+            Token::Identifier => Terminal::Ident(Identifier {
+                ident: self.text[lexeme.span.clone()].to_string(),
+            }),
             _ => {
                 return Err(ParseError::UnexpectedLexeme {
                     unexpected_lexeme: lexeme.clone(),
@@ -320,7 +373,13 @@ impl Parser<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{lexer::Lexer, parser::{ast::{Expr, ExprType}, ParseError, Parser}};
+    use crate::{
+        lexer::Lexer,
+        parser::{
+            ParseError, Parser,
+            ast::{Expr, ExprType},
+        },
+    };
 
     fn lex_and_parse(input: &str) -> Result<Expr, ParseError> {
         let mut lexer = Lexer::new(input);
@@ -329,7 +388,6 @@ mod tests {
         let mut parser = Parser::new(&lexemes, input);
         parser.parse_expr()
     }
-
 
     #[test]
     fn parse_if() {
@@ -342,7 +400,10 @@ mod tests {
     fn parse_if_missing_paren() {
         let input = "if 1==1 { 1; 1 }";
         let ast = lex_and_parse(input);
-        assert!(matches!(ast, Err(ParseError::IfConditionLackingParens { .. })));
+        assert!(matches!(
+            ast,
+            Err(ParseError::IfConditionLackingParens { .. })
+        ));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::parser::{Ast, Expr, ExprType, Statement};
+use crate::parser::{Ast, Expr, ExprType, Statement, StatementType};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum NodeType {
@@ -197,7 +197,7 @@ fn build_graph(ast: Ast) -> Graph {
 
     fn build_from_statement(graph: &mut Graph, statement: Statement) -> usize {
         match statement.value {
-            crate::parser::StatementType::Return { expr } => {
+            StatementType::Return { expr } => {
                 let stmt_id = push_node(graph, NodeType::Statement {
                     name: "Return".to_string(),
                 });
@@ -211,7 +211,19 @@ fn build_graph(ast: Ast) -> Graph {
 
                 stmt_id
             }
-            crate::parser::StatementType::DevaluedExpr { expr } => {
+            StatementType::Decleration { ident, value } => {
+                let stmt_id = push_node(graph, NodeType::Statement { name: format!("Assign {}", ident.value.ident) });
+                let expr_id = build_from_expr(graph, value);
+
+                graph.edges.push(Edge {
+                    from: stmt_id,
+                    to: expr_id,
+                    edge_type: EdgeType::Expr
+                });
+
+                stmt_id
+            }
+            StatementType::DevaluedExpr { expr } => {
                 let stmt_id = push_node(graph, NodeType::Statement {
                     name: "DevaluedExpr".to_string(),
                 });

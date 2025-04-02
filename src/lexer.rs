@@ -81,9 +81,9 @@ macro_rules! __token_type_prio {
         __token_type_prio!(@build $self [ $($built => $builtsec,)* $first => Some(Self::$sec) ] $sec)
     };
     (@build $self:ident [ $($built:ident => $builtsec:expr),* ] $first:ident) => {
-        __token_type_prio!(@build $self [ $($built => $builtsec,)* $first => None ])
+        __token_type_prio!(@finalize $self $($built => $builtsec,)* $first => None)
     };
-    (@build $self:ident [ $($built:ident => $builtsec:expr),* ]) => {
+    (@finalize $self:ident $($built:ident => $builtsec:expr),*) => {
         match $self {
             $(Self::$built => $builtsec,)*
         }
@@ -131,6 +131,7 @@ token_type! {
         #[text = "'/'"]
         Slash,
 
+        // Comparison
         #[text = "'>='"]
         GreaterThanOrEqual,
         #[text = "'<='"]
@@ -140,15 +141,23 @@ token_type! {
         #[text = "'<'"]
         LessThan,
         #[text = "'=='"]
-        Equal,
+        Equality,
         #[text = "'!='"]
-        NotEqual,
+        NotEquality,
 
         #[text = "'!'"]
         Bang,
 
+        #[text = "="]
+        Equal,
+
+        // Keywords
         #[text = "'if'"]
         If,
+        #[text = "'let'"]
+        Let,
+        #[text = "'return'"]
+        Return,
 
         #[text = "'IDENTIFIER'"]
         Identifier,
@@ -254,10 +263,10 @@ impl Token {
                 char_token!('!' @ text_iter);
             }
 
-            Token::Equal => {
+            Token::Equality => {
                 keyword!("==" @ text_iter);
             }
-            Token::NotEqual => {
+            Token::NotEquality => {
                 keyword!("!=" @ text_iter);
             }
             Token::LessThan => {
@@ -273,8 +282,18 @@ impl Token {
                 keyword!(">=" @ text_iter);
             }
 
+            Token::Equal => {
+                char_token!('=' @ text_iter);
+            }
+
             Token::If => {
                 keyword!("if" @ text_iter);
+            }
+            Token::Let => {
+                keyword!("let" @ text_iter);
+            }
+            Token::Return => {
+                keyword!("return" @ text_iter);
             }
 
             Token::Identifier => {

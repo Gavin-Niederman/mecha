@@ -7,6 +7,7 @@ pub type Statement = Spanned<StatementType>;
 #[derive(Debug, Clone, PartialEq)]
 pub enum StatementType {
     Return { expr: Expr },
+    Decleration { ident: Spanned<Identifier>, value: Expr },
     DevaluedExpr { expr: Expr },
 }
 
@@ -53,11 +54,17 @@ pub enum ExprType {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Terminal {
     Boolean(bool),
     Float(f64),
     Integer(i64),
+    Ident(Identifier)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Identifier {
+    pub ident: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,8 +77,8 @@ impl TryFrom<Token> for EqualityOperator {
 
     fn try_from(token: Token) -> Result<Self, Self::Error> {
         match token {
-            Token::Equal => Ok(Self::Equal),
-            Token::NotEqual => Ok(Self::NotEqual),
+            Token::Equality => Ok(Self::Equal),
+            Token::NotEquality => Ok(Self::NotEqual),
             _ => Err(()),
         }
     }

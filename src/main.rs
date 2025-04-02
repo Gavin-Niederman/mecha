@@ -8,16 +8,7 @@ use mecha::{
 };
 
 fn main() {
-    let input = "if (1*(1+1) / 4 >= (4.2-2) / 4) {
-        if (true) {
-        };
-        1+1;
-        1;
-        1;
-
-        1 + 1
-    };
-    1 == 1;";
+    let input = "let hi = if (1 == balls) { return 2; 2 };";
 
     let mut lexer = Lexer::new(input);
     let lexemes = match lexer.collect() {
