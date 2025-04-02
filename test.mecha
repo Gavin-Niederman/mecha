@@ -1,0 +1,8 @@
+let blarg = 2;
+
+let ploey = if (blarg == 1 == blarg != 3) {
+    1 + 1;
+    1
+};
+
+let goop = ploey - blarg;

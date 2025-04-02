@@ -91,7 +91,7 @@ impl Parser<'_> {
 
         let condition = self.parse_equality()?;
 
-        let close_paren = self
+        self
             .consume_lexeme_of_type(&[Token::RightParen])
             .ok_or(ParseError::UnclosedDelimiter {
                 delimiter: open_paren.value,
@@ -102,7 +102,7 @@ impl Parser<'_> {
         let body = self.parse_block()?;
 
         Ok(Expr {
-            span: if_lex.span.start..close_paren.span.end,
+            span: if_lex.span.start..body.span.end,
             value: ExprType::If {
                 condition: Box::new(condition),
                 body: Box::new(body),

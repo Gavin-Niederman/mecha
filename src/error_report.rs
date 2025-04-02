@@ -8,6 +8,12 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SourceFile<'a> {
+    pub text: &'a str,
+    pub filename: &'a str
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorCode {
     LexerInvalidToken,
     ParserUnexpectedEoi,
@@ -49,25 +55,25 @@ fn token_list_to_string(tokens: &[Token]) -> String {
     final_string
 }
 
-pub fn report_lexer_error(source: &str, error: LexerError) {
+pub fn report_lexer_error(source: SourceFile, error: LexerError) {
     let mut colors = ColorGenerator::new();
     let label_color = colors.next();
 
-    Report::build(ReportKind::Error, ("source_code", error.index..error.index))
+    Report::build(ReportKind::Error, (source.filename, error.index..error.index))
         .with_code(ErrorCode::LexerInvalidToken)
         .with_message("Invalid token found in input.")
         .with_label(
-            Label::new(("source_code", error.index..error.index))
+            Label::new((source.filename, error.index..error.index))
                 .with_message("Invalid token starts here.")
                 .with_color(label_color),
         )
         .with_help("Check for invalid characters or malformed keywords and operators")
         .finish()
-        .print(("source_code", Source::from(source)))
+        .print((source.filename, Source::from(source.text)))
         .unwrap();
 }
 
-pub fn report_parser_error(source: &str, error: ParseError) {
+pub fn report_parser_error(source: SourceFile, error: ParseError) {
     let mut colors = ColorGenerator::new();
 
     match error {
@@ -84,7 +90,7 @@ pub fn report_parser_error(source: &str, error: ParseError) {
             possible_tokens,
         } => Report::build(
             ReportKind::Error,
-            ("source_code", unexpected_lexeme.span.clone()),
+            (source.filename, unexpected_lexeme.span.clone()),
         )
         .with_code(ErrorCode::ParserUnexpectedLexeme)
         .with_message(format!(
@@ -92,7 +98,7 @@ pub fn report_parser_error(source: &str, error: ParseError) {
             unexpected_lexeme.value
         ))
         .with_label(
-            Label::new(("source_code", unexpected_lexeme.span))
+            Label::new((source.filename, unexpected_lexeme.span))
                 .with_message("Unexpected input found here.")
                 .with_color(colors.next()),
         )
@@ -105,10 +111,10 @@ pub fn report_parser_error(source: &str, error: ParseError) {
 
         //UNEXPECTED EOI
         ParseError::UnexpectedEndOfInput { lexeme } => {
-            Report::build(ReportKind::Error, ("source_code", lexeme.span.clone()))
+            Report::build(ReportKind::Error, (source.filename, lexeme.span.clone()))
                 .with_code(ErrorCode::ParserUnexpectedEoi)
                 .with_label(
-                    Label::new(("source_code", lexeme.span.end..lexeme.span.end))
+                    Label::new((source.filename, lexeme.span.end..lexeme.span.end))
                         .with_message("Unexpected end of input after this character.")
                         .with_color(colors.next()),
                 )
@@ -117,11 +123,11 @@ pub fn report_parser_error(source: &str, error: ParseError) {
 
         //UNCLOSED DELIM
         ParseError::UnclosedDelimiter { delimiter, start } => {
-            Report::build(ReportKind::Error, ("source_code", start.span.clone()))
+            Report::build(ReportKind::Error, (source.filename, start.span.clone()))
                 .with_code(ErrorCode::ParserUnclosedDeliminator)
                 .with_message("Unclosed delimiter found.")
                 .with_label(
-                    Label::new(("source_code", start.span))
+                    Label::new((source.filename, start.span))
                         .with_color(colors.next())
                         .with_message(format!("Unclosed delimiter starts at this {}", delimiter)),
                 )
@@ -133,16 +139,16 @@ pub fn report_parser_error(source: &str, error: ParseError) {
         ParseError::IfConditionLackingParens {
             if_lexeme,
             expected_paren_at,
-        } => Report::build(ReportKind::Error, ("source_code", if_lexeme.span.clone()))
+        } => Report::build(ReportKind::Error, (source.filename, if_lexeme.span.clone()))
             .with_code(ErrorCode::ParserIfCondMissingParens)
             .with_message("If condition is missing parentheses")
             .with_label(
-                Label::new(("source_code", if_lexeme.span))
+                Label::new((source.filename, if_lexeme.span))
                     .with_color(colors.next())
                     .with_message("This if's condition is not wrapped in parens."),
             )
             .with_label(
-                Label::new(("source_code", expected_paren_at..expected_paren_at))
+                Label::new((source.filename, expected_paren_at..expected_paren_at))
                     .with_color(colors.next())
                     .with_message("Expected parens to start here."),
             )
@@ -155,19 +161,19 @@ pub fn report_parser_error(source: &str, error: ParseError) {
             expr_span,
         } => Report::build(
             ReportKind::Error,
-            ("source_code", block_start..expr_span.end),
+            (source.filename, block_start..expr_span.end),
         )
         .with_code(ErrorCode::ParserExprBeforeEndOfBlock)
         .with_message("Expression found before the end of a block.")
         .with_note("Tailing expressions can only go at the end of a block.")
         .with_help("Try adding a semicolon to make the expression a statement.")
         .with_label(
-            Label::new(("source_code", block_start..block_start))
+            Label::new((source.filename, block_start..block_start))
                 .with_message("In this block.")
                 .with_color(colors.next()),
         )
         .with_label(
-            Label::new(("source_code", expr_span))
+            Label::new((source.filename, expr_span))
                 .with_message("This expression is not in the trailing position.")
                 .with_color(colors.next()),
         )
@@ -179,23 +185,23 @@ pub fn report_parser_error(source: &str, error: ParseError) {
             expected_semicolon_at,
         } => Report::build(
             ReportKind::Error,
-            ("source_code", statement_span.start..expected_semicolon_at),
+            (source.filename, statement_span.start..expected_semicolon_at),
         )
         .with_code(ErrorCode::ParserExprBeforeEndOfBlock)
         .with_message("Missing semicolon at the end of a statement.")
         .with_help("Add a semicolon to the end of the statement.")
         .with_label(
-            Label::new(("source_code", statement_span))
+            Label::new((source.filename, statement_span))
                 .with_message("Missing semicolon here.")
                 .with_color(colors.next()),
         )
         .with_label(
-            Label::new(("source_code", expected_semicolon_at..expected_semicolon_at))
+            Label::new((source.filename, expected_semicolon_at..expected_semicolon_at))
                 .with_message("Expected semicolon to be here.")
                 .with_color(colors.next()),
         )
         .finish(),
     }
-    .print(("source_code", Source::from(source)))
+    .print((source.filename, Source::from(source.text)))
     .unwrap();
 }

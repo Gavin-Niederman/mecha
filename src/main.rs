@@ -1,33 +1,61 @@
-use std::fs::File;
+use std::{fs::File, path::PathBuf};
 
+use clap::Parser as _;
 use mecha::{
-    error_report::{report_lexer_error, report_parser_error},
+    error_report::{SourceFile, report_lexer_error, report_parser_error},
     lexer::Lexer,
     parser::Parser,
     visualize_ast,
 };
 
+#[derive(clap::Parser, Debug, Clone)]
+#[command(version, about, author)]
+struct Args {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Debug, Clone, clap::Subcommand)]
+enum Command {
+    Run { file: PathBuf },
+}
+
 fn main() {
-    let input = "let hi = if (1 == balls) { return 2; 2 };";
+    let args = Args::parse();
 
-    let mut lexer = Lexer::new(input);
-    let lexemes = match lexer.collect() {
-        Ok(lexemes) => lexemes,
-        Err(e) => {
-            report_lexer_error(input, e);
-            return;
+    match args.command {
+        Command::Run { file } => {
+            let filename = file
+                .file_name()
+                .map(|name| name.to_str().unwrap())
+                .unwrap_or("source_code")
+                .to_owned();
+            let text = std::fs::read_to_string(file).unwrap();
+            let source_file = SourceFile {
+                text: &text,
+                filename: &filename,
+            };
+
+            let mut lexer = Lexer::new(&text);
+            let lexemes = match lexer.collect() {
+                Ok(lexemes) => lexemes,
+                Err(e) => {
+                    report_lexer_error(source_file, e);
+                    return;
+                }
+            };
+
+            let mut parser = Parser::new(&lexemes, &text);
+            let ast = match parser.parse() {
+                Ok(ast) => ast,
+                Err(e) => {
+                    report_parser_error(source_file, e);
+                    return;
+                }
+            };
+
+            let mut graph_file = File::create("ast.dot").unwrap();
+            visualize_ast::render_to(ast, &mut graph_file).unwrap();
         }
-    };
-
-    let mut parser = Parser::new(&lexemes, input);
-    let ast = match parser.parse() {
-        Ok(ast) => ast,
-        Err(e) => {
-            report_parser_error(input, e);
-            return;
-        }
-    };
-
-    let mut graph_file = File::create("ast.dot").unwrap();
-    visualize_ast::render_to(ast, &mut graph_file).unwrap();
+    }
 }

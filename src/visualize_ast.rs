@@ -133,7 +133,7 @@ fn build_graph(ast: Ast) -> Graph {
             | ExprType::Term { lhs, rhs, .. }
             | ExprType::Factor { lhs, rhs, .. } => {
                 let eq_id = push_node(graph, NodeType::BinaryOp {
-                    name: "Equality".to_string(),
+                    name: "BinaryOp".to_string(),
                 });
                 let lhs_id = build_from_expr(graph, *lhs);
                 let rhs_id = build_from_expr(graph, *rhs);
