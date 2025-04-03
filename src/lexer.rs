@@ -131,6 +131,12 @@ token_type! {
         #[text = "'/'"]
         Slash,
 
+        // Junction
+        #[text = "'&&'"]
+        And,
+        #[text = "'||'"]
+        Or,
+
         // Comparison
         #[text = "'>='"]
         GreaterThanOrEqual,
@@ -280,6 +286,13 @@ impl Token {
             }
             Token::GreaterThanOrEqual => {
                 keyword!(">=" @ text_iter);
+            }
+
+            Token::And => {
+                keyword!("&&" @ text_iter);
+            }
+            Token::Or => {
+                keyword!("||" @ text_iter);
             }
 
             Token::Equal => {

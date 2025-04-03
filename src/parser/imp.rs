@@ -20,10 +20,15 @@ impl Parser<'_> {
                 })
         }
 
-        match self.consume_lexeme_of_type(&[Token::Let, Token::Return]).cloned() {
-            Some(let_lexeme @ Lexeme {
-                value: Token::Let, ..
-            }) => {
+        match self
+            .consume_lexeme_of_type(&[Token::Let, Token::Return])
+            .cloned()
+        {
+            Some(
+                let_lexeme @ Lexeme {
+                    value: Token::Let, ..
+                },
+            ) => {
                 let ident = self.require_token(Token::Identifier)?;
                 let ident = Spanned {
                     span: ident.span.clone(),
@@ -39,26 +44,23 @@ impl Parser<'_> {
 
                 Ok(Statement {
                     span: let_lexeme.span.start..semicolon.span.end,
-                    value: StatementType::Decleration {
-                        ident,
-                        value,
-                    },
+                    value: StatementType::Decleration { ident, value },
                 })
             }
-            Some(return_lexeme @ Lexeme {
-                value: Token::Return,
-                ..
-            }) => {
+            Some(
+                return_lexeme @ Lexeme {
+                    value: Token::Return,
+                    ..
+                },
+            ) => {
                 let expr = self.parse_expr()?;
                 let semicolon = parse_semicolon(self, return_lexeme.span.start..expr.span.end)?;
 
                 Ok(Statement {
                     span: return_lexeme.span.start..semicolon.span.end,
-                    value: StatementType::Return{
-                        expr,
-                    },
+                    value: StatementType::Return { expr },
                 })
-            },
+            }
             Some(_) => unreachable!(),
             None => {
                 let expr = self.parse_expr()?;
@@ -78,7 +80,7 @@ impl Parser<'_> {
 
     pub(super) fn parse_if(&mut self) -> ParseResult<Expr> {
         let Ok(if_lex) = self.require_token(Token::If) else {
-            return self.parse_equality();
+            return self.parse_disjunction();
         };
 
         let open_paren = self
@@ -89,10 +91,9 @@ impl Parser<'_> {
             })
             .cloned()?;
 
-        let condition = self.parse_equality()?;
+        let condition = self.parse_disjunction()?;
 
-        self
-            .consume_lexeme_of_type(&[Token::RightParen])
+        self.consume_lexeme_of_type(&[Token::RightParen])
             .ok_or(ParseError::UnclosedDelimiter {
                 delimiter: open_paren.value,
                 start: open_paren,
@@ -106,6 +107,41 @@ impl Parser<'_> {
             value: ExprType::If {
                 condition: Box::new(condition),
                 body: Box::new(body),
+            },
+        })
+    }
+
+    pub(super) fn parse_disjunction(&mut self) -> ParseResult<Expr> {
+        let lhs = self.parse_conjunction()?;
+
+        let Ok(_) = self.require_token(Token::Or) else {
+            return Ok(lhs);
+        };
+
+        let rhs = self.parse_disjunction()?;
+
+        Ok(Expr {
+            span: lhs.span.start..rhs.span.end,
+            value: ExprType::Disjunction {
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            },
+        })
+    }
+    pub(super) fn parse_conjunction(&mut self) -> ParseResult<Expr> {
+        let lhs = self.parse_equality()?;
+
+        let Ok(_) = self.require_token(Token::And) else {
+            return Ok(lhs);
+        };
+
+        let rhs = self.parse_conjunction()?;
+
+        Ok(Expr {
+            span: lhs.span.start..rhs.span.end,
+            value: ExprType::Conjunction {
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
             },
         })
     }
@@ -208,7 +244,9 @@ impl Parser<'_> {
     }
 
     pub(super) fn parse_primary(&mut self) -> ParseResult<Expr> {
-        match self.peek_lexeme() {
+        let location = self.location;
+
+        match self.peek_lexeme().cloned() {
             Some(Lexeme {
                 value: Token::LeftParen,
                 ..
@@ -217,6 +255,40 @@ impl Parser<'_> {
                 value: Token::LeftBrace,
                 ..
             }) => self.parse_block(),
+            Some(
+                ident @ Lexeme {
+                    value: Token::Identifier,
+                    ..
+                },
+            ) => {
+                self.advance_lexeme();
+                let Ok(paren_open) = self.require_token(Token::LeftParen) else {
+                    self.location = location;
+                    return self.parse_terminal();
+                };
+
+                //TODO: args
+
+                let paren_close = self
+                    .consume_lexeme_of_type(&[Token::RightParen])
+                    .ok_or_else(|| ParseError::UnclosedDelimiter {
+                        delimiter: Token::LeftParen,
+                        start: paren_open.clone(),
+                    })?;
+
+                Ok(Expr {
+                    span: ident.span.start..paren_close.span.end,
+                    value: ExprType::Call {
+                        ident: Spanned {
+                            span: ident.span.clone(),
+                            value: Identifier {
+                                ident: self.text[ident.span.clone()].to_string(),
+                            },
+                        },
+                        params: vec![],
+                    },
+                })
+            }
             _ => self.parse_terminal(),
         }
     }

@@ -12,6 +12,7 @@ enum NodeType {
     UnaryOp { name: String },
     Literal { value: String },
 
+    Call,
     Block,
 }
 
@@ -28,6 +29,7 @@ enum EdgeType {
     Cond,
     Body,
     Expr,
+    Param,
 
     ContainedStatement,
 }
@@ -60,6 +62,7 @@ impl<'a> dot::Labeller<'a, Node, Edge> for Graph {
             NodeType::UnaryOp { ref name } => dot::LabelText::label(name.clone()),
             NodeType::Literal { ref value } => dot::LabelText::label(value.clone()),
             NodeType::Block => dot::LabelText::label("Block".to_string()),
+            NodeType::Call => dot::LabelText::label("Call".to_string())
         }
     }
     fn edge_label(&'a self, e: &Edge) -> dot::LabelText<'a> {
@@ -69,6 +72,7 @@ impl<'a> dot::Labeller<'a, Node, Edge> for Graph {
             EdgeType::Cond => dot::LabelText::label("cond"),
             EdgeType::Body => dot::LabelText::label("body"),
             EdgeType::Expr => dot::LabelText::label("expr"),
+            EdgeType::Param => dot::LabelText::label("param"),
             EdgeType::ContainedStatement => dot::LabelText::label("contained"),
         }
     }
@@ -108,6 +112,27 @@ fn build_graph(ast: Ast) -> Graph {
         id
     }
 
+    fn push_binary(graph: &mut Graph, lhs: Expr, rhs: Expr, op: &str) -> usize {
+        let eq_id = push_node(graph, NodeType::BinaryOp {
+            name: format!("BinaryOp ({op})"),
+        });
+        let lhs_id = build_from_expr(graph, lhs);
+        let rhs_id = build_from_expr(graph, rhs);
+
+        graph.edges.push(Edge {
+            from: eq_id,
+            to: lhs_id,
+            edge_type: EdgeType::Lhs,
+        });
+        graph.edges.push(Edge {
+            from: eq_id,
+            to: rhs_id,
+            edge_type: EdgeType::Rhs,
+        });
+
+        eq_id
+    }
+
     fn build_from_expr(graph: &mut Graph, expr: Expr) -> usize {
         match expr.value {
             ExprType::If { condition, body } => {
@@ -128,32 +153,25 @@ fn build_graph(ast: Ast) -> Graph {
 
                 if_id
             }
-            ExprType::Equality { lhs, rhs, .. }
-            | ExprType::Comparison { lhs, rhs, .. }
-            | ExprType::Term { lhs, rhs, .. }
-            | ExprType::Factor { lhs, rhs, .. } => {
-                let eq_id = push_node(graph, NodeType::BinaryOp {
-                    name: "BinaryOp".to_string(),
-                });
-                let lhs_id = build_from_expr(graph, *lhs);
-                let rhs_id = build_from_expr(graph, *rhs);
 
-                graph.edges.push(Edge {
-                    from: eq_id,
-                    to: lhs_id,
-                    edge_type: EdgeType::Lhs,
-                });
-                graph.edges.push(Edge {
-                    from: eq_id,
-                    to: rhs_id,
-                    edge_type: EdgeType::Rhs,
-                });
-
-                eq_id
+            ExprType::Comparison { lhs, operator, rhs } => {
+                push_binary(graph, *lhs, *rhs, &operator.value.to_string())
             }
-            ExprType::Unary { rhs, .. } => {
+            ExprType::Equality { lhs, operator, rhs } => {
+                push_binary(graph, *lhs, *rhs, &operator.value.to_string())
+            }
+            ExprType::Term { lhs, operator, rhs } => {
+                push_binary(graph, *lhs, *rhs, &operator.value.to_string())
+            }
+            ExprType::Factor { lhs, operator, rhs } => {
+                push_binary(graph, *lhs, *rhs, &operator.value.to_string())
+            }
+            ExprType::Conjunction { lhs, rhs } => push_binary(graph, *lhs, *rhs, "&&"),
+            ExprType::Disjunction { lhs, rhs } => push_binary(graph, *lhs, *rhs, "||"),
+
+            ExprType::Unary { rhs, operator } => {
                 let unary_id = push_node(graph, NodeType::UnaryOp {
-                    name: "Unary".to_string(),
+                    name: format!("Unary ({})", operator.value),
                 });
                 let rhs_id = build_from_expr(graph, *rhs);
 
@@ -165,11 +183,9 @@ fn build_graph(ast: Ast) -> Graph {
 
                 unary_id
             }
-            ExprType::Terminal(terminal) => {
-                push_node(graph, NodeType::Literal {
-                    value: format!("{:?}", terminal),
-                })
-            }
+            ExprType::Terminal(terminal) => push_node(graph, NodeType::Literal {
+                value: format!("{:?}", terminal),
+            }),
             ExprType::Block { statements, ret } => {
                 let block_id = push_node(graph, NodeType::Block);
                 for statement in statements {
@@ -191,7 +207,21 @@ fn build_graph(ast: Ast) -> Graph {
                 }
 
                 block_id
-            },
+            }
+
+            ExprType::Call { ident, params } => {
+                let call_id = push_node(graph, NodeType::Call);
+                let ident_id = push_node(graph, NodeType::Literal { value: format!("{:?}", ident.value) });
+
+                for param in params {
+                    let param_id = build_from_expr(graph, param);
+                    graph.edges.push(Edge { from: call_id, to: param_id, edge_type: EdgeType::Param });
+                }
+
+                graph.edges.push(Edge { from: call_id, to: ident_id, edge_type: EdgeType::Expr });
+
+                call_id
+            }
         }
     }
 
@@ -212,13 +242,15 @@ fn build_graph(ast: Ast) -> Graph {
                 stmt_id
             }
             StatementType::Decleration { ident, value } => {
-                let stmt_id = push_node(graph, NodeType::Statement { name: format!("Assign {}", ident.value.ident) });
+                let stmt_id = push_node(graph, NodeType::Statement {
+                    name: format!("Assign {}", ident.value.ident),
+                });
                 let expr_id = build_from_expr(graph, value);
 
                 graph.edges.push(Edge {
                     from: stmt_id,
                     to: expr_id,
-                    edge_type: EdgeType::Expr
+                    edge_type: EdgeType::Expr,
                 });
 
                 stmt_id

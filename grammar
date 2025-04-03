@@ -8,6 +8,8 @@ expression     → if
 if             → "if" "(" equality ")" block
 if             → equality
 
+disjunction    → conjunction "||" disjunction 
+conjunction    → equality "&&" conjunction
 equality       → comparison ( "!=" | "==" ) equality 
 comparison     → term ( ">" | ">=" | "<" | "<=") comparison 
 
@@ -17,9 +19,11 @@ factor         → unary ( "/" | "*" ) factor
 unary          → ( "!" | "-" ) unary
 unary          → primary
 
+primary        → call
 primary        → terminal
 primary        → "(" expression ")"
 primary        → block
 
+call           → IDENT "(" (expression ",")* ")" 
 terminal       → NUMBER | STRING | "true" | "false" | "nil" | IDENT
 block          → "{" (statement)* (expression)? "}"

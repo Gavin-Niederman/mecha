@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{Spanned, lexer::Token};
 
 pub type Ast = Vec<Statement>;
@@ -31,6 +33,14 @@ pub enum ExprType {
         rhs: Box<Expr>,
     },
 
+    Disjunction {
+        lhs: Box<Expr>,
+        rhs: Box<Expr>
+    },
+    Conjunction {
+        lhs: Box<Expr>,
+        rhs: Box<Expr>
+    },
     Term {
         lhs: Box<Expr>,
         operator: Spanned<TermOperator>,
@@ -47,6 +57,10 @@ pub enum ExprType {
         rhs: Box<Expr>,
     },
 
+    Call {
+        ident: Spanned<Identifier>,
+        params: Vec<Expr>
+    },
     Terminal(Terminal),
     Block {
         statements: Vec<Statement>,
@@ -83,6 +97,14 @@ impl TryFrom<Token> for EqualityOperator {
         }
     }
 }
+impl Display for EqualityOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EqualityOperator::Equal =>  write!(f, "'=='"),
+            EqualityOperator::NotEqual =>  write!(f, "'!='"),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComparisonOperator {
@@ -104,6 +126,16 @@ impl TryFrom<Token> for ComparisonOperator {
         }
     }
 }
+impl Display for ComparisonOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ComparisonOperator::GreaterThan =>  write!(f, "'>'"),
+            ComparisonOperator::GreaterThanOrEqual =>  write!(f, "'>='"),
+            ComparisonOperator::LessThan =>  write!(f, "'<'"),
+            ComparisonOperator::LessThanOrEqual =>  write!(f, "'<='"),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TermOperator {
@@ -118,6 +150,14 @@ impl TryFrom<Token> for TermOperator {
             Token::Plus => Ok(Self::Plus),
             Token::Minus => Ok(Self::Minus),
             _ => Err(()),
+        }
+    }
+}
+impl Display for TermOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TermOperator::Plus => write!(f, "'+'"),
+            TermOperator::Minus => write!(f, "'-'"),
         }
     }
 }
@@ -138,6 +178,14 @@ impl TryFrom<Token> for FactorOperator {
         }
     }
 }
+impl Display for FactorOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FactorOperator::Multiply => write!(f, "'*'"),
+            FactorOperator::Divide => write!(f, "'/'"),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOperator {
@@ -152,6 +200,14 @@ impl TryFrom<Token> for UnaryOperator {
             Token::Minus => Ok(Self::Negative),
             Token::Bang => Ok(Self::Negate),
             _ => Err(()),
+        }
+    }
+}
+impl Display for UnaryOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnaryOperator::Negative => write!(f, "'-'"),
+            UnaryOperator::Negate => write!(f, "'!'"),
         }
     }
 }
