@@ -267,7 +267,16 @@ impl Parser<'_> {
                     return self.parse_terminal();
                 };
 
-                //TODO: args
+                let mut params = vec![];
+                while let Ok(expr) = self.parse_expr() {
+                    params.push(expr);
+                    if self
+                        .consume_lexeme_of_type(&[Token::Comma])
+                        .is_none()
+                    {
+                        break;
+                    }
+                }
 
                 let paren_close = self
                     .consume_lexeme_of_type(&[Token::RightParen])
@@ -285,7 +294,7 @@ impl Parser<'_> {
                                 ident: self.text[ident.span.clone()].to_string(),
                             },
                         },
-                        params: vec![],
+                        params,
                     },
                 })
             }

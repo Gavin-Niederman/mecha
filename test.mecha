@@ -5,4 +5,4 @@ let ploey = if (blarg == 1 && blarg != 3) {
     1
 };
 
-let goop = !-(ploey() && blarg + 1 == 2) - -blarg;
+let goop = !-(ploey(pool, goop, 1+1, forb) && blarg + 1 == 2) - -blarg;

@@ -117,10 +117,13 @@ token_type! {
         #[text = "'}}'"]
         RightBrace,
 
+        // Delimiters
         #[text = "':'"]
         Colon,
         #[text = "';'"]
         Semicolon,
+        #[text = "','"]
+        Comma,
 
         #[text = "'+'"]
         Plus,
@@ -250,6 +253,9 @@ impl Token {
             }
             Token::Semicolon => {
                 char_token!(';' @ text_iter);
+            }
+            Token::Comma => {
+                char_token!(',' @ text_iter);
             }
 
             Token::Plus => {
