@@ -7,16 +7,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'sillygen'",
+            "name": "Debug unit tests in library 'mecha'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=sillygen"
+                    "--package=mecha"
                 ],
                 "filter": {
-                    "name": "sillygen",
+                    "name": "mecha",
                     "kind": "lib"
                 }
             },
@@ -26,34 +26,37 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'sillygen'",
+            "name": "Debug executable 'mecha'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=sillygen",
-                    "--package=sillygen"
+                    "--bin=mecha",
+                    "--package=mecha",                    
                 ],
                 "filter": {
-                    "name": "sillygen",
+                    "name": "mecha",
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": [
+                "run",
+                "test.mecha"
+            ],
             "cwd": "${workspaceFolder}"
         },
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'sillygen'",
+            "name": "Debug unit tests in executable 'mecha'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=sillygen",
-                    "--package=sillygen"
+                    "--bin=mecha",
+                    "--package=mecha"
                 ],
                 "filter": {
-                    "name": "sillygen",
+                    "name": "mecha",
                     "kind": "bin"
                 }
             },

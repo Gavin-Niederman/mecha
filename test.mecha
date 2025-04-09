@@ -1,5 +1,13 @@
 fun hi_there(hi) {
-    hi
+    if (hi > 1) {
+        hi_there(hi - 1)
+    };
 };
 
-hi_there(1);
+let goo = 1;
+fun goop() {
+    let goo = 2;
+    hi_there(10);
+};
+
+goop();    

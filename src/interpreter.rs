@@ -1,4 +1,4 @@
-use std::collections::{HashMap, LinkedList};
+use std::collections::{BTreeMap, HashMap, LinkedList};
 
 use snafu::Snafu;
 
@@ -16,7 +16,11 @@ enum Value {
     Boolean(bool),
     Float(f64),
     Integer(i64),
-    Function { params: Vec<String>, body: Block },
+    Function {
+        params: Vec<String>,
+        body: Block,
+        defined_in_scope: u64,
+    },
 }
 impl Value {
     pub fn value_type(&self) -> ValueType {
@@ -86,8 +90,9 @@ pub enum ValueType {
     Function,
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 struct Scope {
+    parent_scope: Option<u64>,
     values: HashMap<String, Value>,
 }
 impl Scope {
@@ -100,10 +105,19 @@ impl Scope {
                 span,
             })
     }
+
+    fn new(parent: Option<u64>) -> Self {
+        Self {
+            parent_scope: parent,
+            values: HashMap::new(),
+        }
+    }
 }
 
 pub struct Interpreter {
-    scopes: LinkedList<Scope>,
+    next_scope_id: u64,
+    top_scope: u64,
+    scopes: BTreeMap<u64, Scope>,
     ast: Ast,
 }
 
@@ -127,10 +141,12 @@ macro_rules! apply_op_to_value {
 impl Interpreter {
     pub fn new(ast: Ast) -> Self {
         let mut this = Self {
-            scopes: LinkedList::new(),
+            next_scope_id: 0,
+            top_scope: 0,
+            scopes: BTreeMap::new(),
             ast,
         };
-        this.push_scope(Scope::default());
+        this.push_scope(Scope::new(None));
         this
     }
 
@@ -146,25 +162,49 @@ impl Interpreter {
 
     /// Collects all accessible identifiers into a single super scope
     fn super_scope(&self) -> Scope {
-        let mut scope = Scope::default();
+        let mut scope = Scope::new(None);
 
-        for s in self.scopes.iter() {
-            for (k, v) in s.values.iter() {
-                scope.values.insert(k.clone(), (*v).clone());
+        let mut top_scope = self.top_scope();
+        loop {
+            for value in top_scope.values.iter() {
+                if scope.values.contains_key(value.0) {
+                    continue;
+                }
+                scope.values.insert(value.0.clone(), value.1.clone());
             }
+
+            let Some(parent_scope) = top_scope.parent_scope else {
+                break;
+            };
+
+            let parent_scope = self.scopes.get(&parent_scope).unwrap();
+            top_scope = parent_scope;
         }
 
         scope
     }
 
     fn push_scope(&mut self, scope: Scope) {
-        self.scopes.push_back(scope);
+        let id = self.next_scope_id;
+        self.scopes.insert(id, scope);
+        self.top_scope = id;
+        self.next_scope_id += 1;
     }
     fn pop_scope(&mut self) -> Scope {
-        self.scopes.pop_back().unwrap()
+        let id = self.top_scope;
+        let scope = self.scopes.remove(&id).unwrap();
+        self.top_scope = scope.parent_scope.unwrap_or(0);
+        scope
     }
-    fn top_scope(&mut self) -> &mut Scope {
-        self.scopes.back_mut().unwrap()
+    fn top_scope(&self) -> &Scope {
+        self.scopes
+            .get(&self.top_scope)
+            .expect("Top scope should always exist")
+    }
+    fn top_scope_mut(&mut self) -> &mut Scope {
+        self.scopes
+            .get_mut(&self.top_scope)
+            .expect("Top scope should always exist")
     }
 
     fn visit_expr(&mut self, expr: Expr) -> Result<Value, InterpreterError> {
@@ -298,6 +338,7 @@ impl Interpreter {
                 let Value::Function {
                     params: function_params,
                     body: function_body,
+                    defined_in_scope,
                 } = super_scope.get(&ident.value.ident, ident.span)?
                 else {
                     return Err(InterpreterError::NotAFunction {
@@ -320,17 +361,20 @@ impl Interpreter {
                     });
                 }
 
-                let mut new_scope = Scope::default();
+                let mut new_scope = Scope::new(Some(defined_in_scope));
                 for (param, arg) in function_params.iter().zip(call_params.iter()) {
                     let value = self.visit_expr(arg.clone())?;
                     new_scope.values.insert(param.clone(), value);
                 }
 
+                let old_top_scope = self.top_scope;
+                self.top_scope = defined_in_scope;
+
                 self.push_scope(new_scope);
 
                 let return_value = self.visit_block(function_body)?;
-
                 self.pop_scope();
+                self.top_scope = old_top_scope;
 
                 Ok(return_value)
             }
@@ -346,8 +390,7 @@ impl Interpreter {
     }
 
     fn visit_block(&mut self, block: Block) -> Result<Value, InterpreterError> {
-        self.push_scope(Scope::default());
-
+        self.push_scope(Scope::new(Some(self.top_scope)));
         for statement in block.statements {
             self.visit_statement(statement)?;
         }
@@ -379,15 +422,16 @@ impl Interpreter {
                 let function_value = Value::Function {
                     params,
                     body: body.value,
+                    defined_in_scope: self.top_scope,
                 };
 
-                self.top_scope()
+                self.top_scope_mut()
                     .values
                     .insert(ident.value.ident, function_value);
             }
             StatementType::Decleration { ident, value } => {
                 let value = self.visit_expr(value)?;
-                self.top_scope().values.insert(ident.value.ident, value);
+                self.top_scope_mut().values.insert(ident.value.ident, value);
             }
             StatementType::DevaluedExpr { expr } => {
                 self.visit_expr(expr)?;

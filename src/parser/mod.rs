@@ -40,7 +40,7 @@ impl<'a> Parser<'a> {
                 Err(e) => {
                     let eoi = self.lexemes.get(location);
                     let Some(Lexeme {
-                        value: Token::Eoi, ..
+                        value: Token::Eoi | Token::WhiteSpace, ..
                     }) = eoi
                     else {
                         return Err(e);
