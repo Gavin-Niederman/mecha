@@ -1,8 +1,5 @@
-let blarg = 2;
-
-let ploey = if (blarg == 1 && blarg != 3) {
-    1 + 1;
-    1
+fun hi_there(hi) {
+    hi
 };
 
-let goop = !-(ploey(pool, goop, 1+1, forb) && blarg + 1 == 2) - -blarg;
+hi_there(1);

@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::parser::{Ast, Expr, ExprType, Statement, StatementType};
+use crate::parser::{Ast, Block, Expr, ExprType, Statement, StatementType};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum NodeType {
@@ -62,7 +62,7 @@ impl<'a> dot::Labeller<'a, Node, Edge> for Graph {
             NodeType::UnaryOp { ref name } => dot::LabelText::label(name.clone()),
             NodeType::Literal { ref value } => dot::LabelText::label(value.clone()),
             NodeType::Block => dot::LabelText::label("Block".to_string()),
-            NodeType::Call => dot::LabelText::label("Call".to_string())
+            NodeType::Call => dot::LabelText::label("Call".to_string()),
         }
     }
     fn edge_label(&'a self, e: &Edge) -> dot::LabelText<'a> {
@@ -138,7 +138,7 @@ fn build_graph(ast: Ast) -> Graph {
             ExprType::If { condition, body } => {
                 let if_id = push_node(graph, NodeType::If);
                 let cond_id = build_from_expr(graph, *condition);
-                let body_id = build_from_expr(graph, *body);
+                let body_id = build_from_expr(graph, body.into());
 
                 graph.edges.push(Edge {
                     from: if_id,
@@ -186,7 +186,7 @@ fn build_graph(ast: Ast) -> Graph {
             ExprType::Terminal(terminal) => push_node(graph, NodeType::Literal {
                 value: format!("{:?}", terminal),
             }),
-            ExprType::Block { statements, ret } => {
+            ExprType::Block(Block { statements, ret }) => {
                 let block_id = push_node(graph, NodeType::Block);
                 for statement in statements {
                     let contained_id = build_from_statement(graph, statement);
@@ -211,14 +211,24 @@ fn build_graph(ast: Ast) -> Graph {
 
             ExprType::Call { ident, params } => {
                 let call_id = push_node(graph, NodeType::Call);
-                let ident_id = push_node(graph, NodeType::Literal { value: format!("{:?}", ident.value) });
+                let ident_id = push_node(graph, NodeType::Literal {
+                    value: format!("{:?}", ident.value),
+                });
 
                 for param in params {
                     let param_id = build_from_expr(graph, param);
-                    graph.edges.push(Edge { from: call_id, to: param_id, edge_type: EdgeType::Param });
+                    graph.edges.push(Edge {
+                        from: call_id,
+                        to: param_id,
+                        edge_type: EdgeType::Param,
+                    });
                 }
 
-                graph.edges.push(Edge { from: call_id, to: ident_id, edge_type: EdgeType::Expr });
+                graph.edges.push(Edge {
+                    from: call_id,
+                    to: ident_id,
+                    edge_type: EdgeType::Expr,
+                });
 
                 call_id
             }
@@ -227,6 +237,35 @@ fn build_graph(ast: Ast) -> Graph {
 
     fn build_from_statement(graph: &mut Graph, statement: Statement) -> usize {
         match statement.value {
+            StatementType::FunctionDeclaration {
+                ident,
+                params,
+                body,
+            } => {
+                let stmt_id = push_node(graph, NodeType::Statement {
+                    name: format!("FunctionDeclaration {}", ident.value.ident),
+                });
+                let body_id = build_from_expr(graph, body.into());
+
+                for param in params {
+                    let param_id = push_node(graph, NodeType::Literal {
+                        value: format!("{:?}", param.value),
+                    });
+                    graph.edges.push(Edge {
+                        from: stmt_id,
+                        to: param_id,
+                        edge_type: EdgeType::Param,
+                    });
+                }
+
+                graph.edges.push(Edge {
+                    from: stmt_id,
+                    to: body_id,
+                    edge_type: EdgeType::Body,
+                });
+
+                stmt_id
+            }
             StatementType::Return { expr } => {
                 let stmt_id = push_node(graph, NodeType::Statement {
                     name: "Return".to_string(),

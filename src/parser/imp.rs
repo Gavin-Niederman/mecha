@@ -1,6 +1,7 @@
 use crate::{
     Span, Spanned,
     lexer::{Lexeme, Token},
+    parser::Block,
 };
 
 use super::{
@@ -21,7 +22,7 @@ impl Parser<'_> {
         }
 
         match self
-            .consume_lexeme_of_type(&[Token::Let, Token::Return])
+            .consume_lexeme_of_type(&[Token::Let, Token::Return, Token::Fun])
             .cloned()
         {
             Some(
@@ -59,6 +60,60 @@ impl Parser<'_> {
                 Ok(Statement {
                     span: return_lexeme.span.start..semicolon.span.end,
                     value: StatementType::Return { expr },
+                })
+            }
+            Some(
+                fun_lexeme @ Lexeme {
+                    value: Token::Fun, ..
+                },
+            ) => {
+                let ident = self.require_token(Token::Identifier)?;
+                let ident = Spanned {
+                    span: ident.span.clone(),
+                    value: Identifier {
+                        ident: self.text[ident.span.clone()].to_string(),
+                    },
+                };
+
+                let Some(paren_open) = self.consume_lexeme_of_type(&[Token::LeftParen]).cloned()
+                else {
+                    return Err(ParseError::UnexpectedLexeme {
+                        unexpected_lexeme: self.lexemes[self.location].clone(),
+                        possible_tokens: vec![Token::LeftParen],
+                    });
+                };
+
+                let mut params = vec![];
+                while let Ok(param) = self.require_token(Token::Identifier) {
+                    let param = Spanned {
+                        span: param.span.clone(),
+                        value: Identifier {
+                            ident: self.text[param.span.clone()].to_string(),
+                        },
+                    };
+                    params.push(param);
+                    if self.consume_lexeme_of_type(&[Token::Comma]).is_none() {
+                        break;
+                    }
+                }
+
+                self.consume_lexeme_of_type(&[Token::RightParen])
+                    .ok_or_else(|| ParseError::UnclosedDelimiter {
+                        delimiter: Token::LeftParen,
+                        start: paren_open.clone(),
+                    })?;
+
+                let block = self.parse_block()?;
+
+                let semicolon = parse_semicolon(self, fun_lexeme.span.start..block.span.end)?;
+
+                Ok(Statement {
+                    span: fun_lexeme.span.start..semicolon.span.end,
+                    value: StatementType::FunctionDeclaration {
+                        ident,
+                        params,
+                        body: block,
+                    },
                 })
             }
             Some(_) => unreachable!(),
@@ -106,7 +161,7 @@ impl Parser<'_> {
             span: if_lex.span.start..body.span.end,
             value: ExprType::If {
                 condition: Box::new(condition),
-                body: Box::new(body),
+                body,
             },
         })
     }
@@ -254,7 +309,7 @@ impl Parser<'_> {
             Some(Lexeme {
                 value: Token::LeftBrace,
                 ..
-            }) => self.parse_block(),
+            }) => Ok(self.parse_block()?.into()),
             Some(
                 ident @ Lexeme {
                     value: Token::Identifier,
@@ -270,10 +325,7 @@ impl Parser<'_> {
                 let mut params = vec![];
                 while let Ok(expr) = self.parse_expr() {
                     params.push(expr);
-                    if self
-                        .consume_lexeme_of_type(&[Token::Comma])
-                        .is_none()
-                    {
+                    if self.consume_lexeme_of_type(&[Token::Comma]).is_none() {
                         break;
                     }
                 }
@@ -310,6 +362,7 @@ impl Parser<'_> {
         };
 
         let terminal = match lexeme.value {
+            Token::Nil => Terminal::Nil,
             Token::True => Terminal::Boolean(true),
             Token::False => Terminal::Boolean(false),
             Token::Float => Terminal::Float(self.text[lexeme.span.clone()].parse().unwrap()),
@@ -320,7 +373,13 @@ impl Parser<'_> {
             _ => {
                 return Err(ParseError::UnexpectedLexeme {
                     unexpected_lexeme: lexeme.clone(),
-                    possible_tokens: vec![Token::True, Token::False, Token::Float, Token::Integer],
+                    possible_tokens: vec![
+                        Token::True,
+                        Token::False,
+                        Token::Float,
+                        Token::Integer,
+                        Token::Nil,
+                    ],
                 });
             }
         };
@@ -356,7 +415,7 @@ impl Parser<'_> {
         })
     }
 
-    pub(super) fn parse_block(&mut self) -> ParseResult<Expr> {
+    pub(super) fn parse_block(&mut self) -> ParseResult<Spanned<Block>> {
         let lexeme = self.peek_lexeme().cloned();
         match lexeme {
             Some(
@@ -433,9 +492,9 @@ impl Parser<'_> {
                         start: open_brace.clone(),
                     })?;
 
-                Ok(Expr {
+                Ok(Spanned {
                     span: open_brace.span.start..close_brace.span.end,
-                    value: ExprType::Block {
+                    value: Block {
                         statements,
                         ret: trailing_expr.map(Box::new),
                     },

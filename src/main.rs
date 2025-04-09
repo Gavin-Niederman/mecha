@@ -2,10 +2,7 @@ use std::{fs::File, path::PathBuf};
 
 use clap::Parser as _;
 use mecha::{
-    error_report::{SourceFile, report_lexer_error, report_parser_error},
-    lexer::Lexer,
-    parser::Parser,
-    visualize_ast,
+    error_report::{report_lexer_error, report_parser_error, SourceFile}, interpreter::Interpreter, lexer::Lexer, parser::Parser, visualize_ast
 };
 
 #[derive(clap::Parser, Debug, Clone)]
@@ -55,7 +52,10 @@ fn main() {
             };
 
             let mut graph_file = File::create("ast.dot").unwrap();
-            visualize_ast::render_to(ast, &mut graph_file).unwrap();
+            visualize_ast::render_to(ast.clone(), &mut graph_file).unwrap();
+
+            let mut interpreter = Interpreter::new(ast);
+            interpreter.interpret().unwrap();
         }
     }
 }

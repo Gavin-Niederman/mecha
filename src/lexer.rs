@@ -167,6 +167,8 @@ token_type! {
         Let,
         #[text = "'return'"]
         Return,
+        #[text = "'fun'"]
+        Fun,
 
         #[text = "'IDENTIFIER'"]
         Identifier,
@@ -313,6 +315,9 @@ impl Token {
             }
             Token::Return => {
                 keyword!("return" @ text_iter);
+            }
+            Token::Fun => {
+                keyword!("fun" @ text_iter);
             }
 
             Token::Identifier => {

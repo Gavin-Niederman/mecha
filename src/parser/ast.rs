@@ -9,6 +9,11 @@ pub type Statement = Spanned<StatementType>;
 #[derive(Debug, Clone, PartialEq)]
 pub enum StatementType {
     Return { expr: Expr },
+    FunctionDeclaration {
+        ident: Spanned<Identifier>,
+        params: Vec<Spanned<Identifier>>,
+        body: Spanned<Block>,
+    },
     Decleration { ident: Spanned<Identifier>, value: Expr },
     DevaluedExpr { expr: Expr },
 }
@@ -19,7 +24,7 @@ pub type Expr = Spanned<ExprType>;
 pub enum ExprType {
     If {
         condition: Box<Expr>,
-        body: Box<Expr>,
+        body: Spanned<Block>,
     },
 
     Equality {
@@ -62,18 +67,30 @@ pub enum ExprType {
         params: Vec<Expr>
     },
     Terminal(Terminal),
-    Block {
-        statements: Vec<Statement>,
-        ret: Option<Box<Expr>>,
-    },
+    Block(Block),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Terminal {
+    Nil,
     Boolean(bool),
     Float(f64),
     Integer(i64),
     Ident(Identifier)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Block {
+    pub statements: Vec<Statement>,
+    pub ret: Option<Box<Expr>>,
+} 
+impl From<Spanned<Block>> for Expr {
+    fn from(value: Spanned<Block>) -> Self {
+        Expr {
+            span: value.span,
+            value: ExprType::Block(value.value)
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

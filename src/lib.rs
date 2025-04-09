@@ -6,6 +6,7 @@ pub mod error_report;
 pub mod lexer;
 pub mod parser;
 pub mod visualize_ast;
+pub mod interpreter;
 
 pub type Span = std::ops::Range<usize>;
 #[derive(Debug, Clone, PartialEq, Eq)]

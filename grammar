@@ -1,6 +1,7 @@
 statement      → return | decl | devalued
 return         → "return" expression ";"
 decl           → "let" IDENT "=" expression ";"
+function       → "fun" IDENT "(" (IDENT ",")* ")" block
 devalued       → expression ";"
 
 expression     → if
