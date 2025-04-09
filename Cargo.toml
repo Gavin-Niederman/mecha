@@ -8,3 +8,6 @@ ariadne = { version = "0.5.1", features = ["auto-color"] }
 clap = { version = "4.5.35", features = ["derive"] }
 dot = "0.1.4"
 snafu = "0.8.5"
+
+[lints.clippy]
+missing_const_for_fn = "warn"

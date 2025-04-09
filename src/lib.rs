@@ -15,7 +15,7 @@ pub struct Spanned<T> {
     pub value: T,
 }
 impl<T> Spanned<T> {
-    pub fn new(span: Span, value: T) -> Spanned<T> {
+    pub const fn new(span: Span, value: T) -> Spanned<T> {
         Spanned { span, value }
     }
     pub fn into_inner(self) -> T {

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, LinkedList};
+use std::collections::{BTreeMap, HashMap};
 
 use snafu::Snafu;
 
@@ -23,7 +23,7 @@ enum Value {
     },
 }
 impl Value {
-    pub fn value_type(&self) -> ValueType {
+    pub const fn value_type(&self) -> ValueType {
         match self {
             Value::Nil => ValueType::Nil,
             Value::Boolean(_) => ValueType::Boolean,
@@ -417,7 +417,7 @@ impl Interpreter {
                 let params = params
                     .into_iter()
                     .map(|param| param.value.ident)
-                    .collect::<Vec<_>>();
+                    .collect();
 
                 let function_value = Value::Function {
                     params,

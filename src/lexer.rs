@@ -46,7 +46,7 @@ macro_rules! token_type {
         }
 
         impl $ident {
-            fn next_in_priority(&self) -> Option<$ident> {
+            const fn next_in_priority(&self) -> Option<$ident> {
                 __token_type_prio!(@start self $($variant),*)
             }
         }
@@ -352,7 +352,7 @@ pub struct Lexer<'a> {
 }
 
 impl Lexer<'_> {
-    pub fn new(input: &str) -> Lexer {
+    pub const fn new(input: &str) -> Lexer {
         Lexer { input, position: 0 }
     }
 
