@@ -19,7 +19,7 @@ pub struct Parser<'a> {
     location: usize,
 }
 impl<'a> Parser<'a> {
-    pub fn new(lexemes: &'a [Lexeme], text: &'a str) -> Self {
+    pub const fn new(lexemes: &'a [Lexeme], text: &'a str) -> Self {
         Self {
             lexemes,
             text,
@@ -30,6 +30,7 @@ impl<'a> Parser<'a> {
         let mut statements = vec![];
 
         loop {
+            self.skip_whitespace_lexemes();
             let location = self.location;
             let statement = self.parse_statement();
 
@@ -40,7 +41,7 @@ impl<'a> Parser<'a> {
                 Err(e) => {
                     let eoi = self.lexemes.get(location);
                     let Some(Lexeme {
-                        value: Token::Eoi | Token::WhiteSpace, ..
+                        value: Token::Eoi, ..
                     }) = eoi
                     else {
                         return Err(e);

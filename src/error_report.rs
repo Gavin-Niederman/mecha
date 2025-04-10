@@ -3,14 +3,15 @@ use std::fmt::Display;
 use ariadne::{ColorGenerator, Label, Report, ReportKind, Source};
 
 use crate::{
-    lexer::{LexerError, Token},
+    interpreter::{InterpreterError, ValueType},
+    lexer::LexerError,
     parser::ParseError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SourceFile<'a> {
     pub text: &'a str,
-    pub filename: &'a str
+    pub filename: &'a str,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,7 +22,14 @@ pub enum ErrorCode {
     ParserUnexpectedLexeme,
     ParserIfCondMissingParens,
     ParserExprBeforeEndOfBlock,
+    InterpreterUnboundIdent,
+    InterpreterNotAFunction,
+    InterpreterInvalidType,
+    InterpreterMismatchedTypes,
+    InterpreterIncorrectArgumentCount,
+    InterpreterDivideByZero,
 }
+
 impl Display for ErrorCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -33,14 +41,22 @@ impl Display for ErrorCode {
             ErrorCode::ParserExprBeforeEndOfBlock => {
                 write!(f, "parser:expression_before_end_of_block")
             }
+            ErrorCode::InterpreterUnboundIdent => write!(f, "interpreter:unbound_ident"),
+            ErrorCode::InterpreterNotAFunction => write!(f, "interpreter:not_a_function"),
+            ErrorCode::InterpreterInvalidType => write!(f, "interpreter:invalid_type"),
+            ErrorCode::InterpreterMismatchedTypes => write!(f, "interpreter:mismatched_types"),
+            ErrorCode::InterpreterIncorrectArgumentCount => {
+                write!(f, "interpreter:incorrect_argument_count")
+            }
+            ErrorCode::InterpreterDivideByZero => write!(f, "interpreter:divide_by_zero"),
         }
     }
 }
 
-fn token_list_to_string(tokens: &[Token]) -> String {
-    let formatted = tokens
+fn list_to_string<I: Display>(items: &[I]) -> String {
+    let formatted = items
         .iter()
-        .map(|token| token.to_string())
+        .map(|item| item.to_string())
         .collect::<Vec<_>>();
 
     let mut final_string = String::new();
@@ -59,18 +75,21 @@ pub fn report_lexer_error(source: SourceFile, error: LexerError) {
     let mut colors = ColorGenerator::new();
     let label_color = colors.next();
 
-    Report::build(ReportKind::Error, (source.filename, error.index..error.index))
-        .with_code(ErrorCode::LexerInvalidToken)
-        .with_message("Invalid token found in input.")
-        .with_label(
-            Label::new((source.filename, error.index..error.index))
-                .with_message("Invalid token starts here.")
-                .with_color(label_color),
-        )
-        .with_help("Check for invalid characters or malformed keywords and operators")
-        .finish()
-        .print((source.filename, Source::from(source.text)))
-        .unwrap();
+    Report::build(
+        ReportKind::Error,
+        (source.filename, error.index..error.index),
+    )
+    .with_code(ErrorCode::LexerInvalidToken)
+    .with_message("Invalid token found in input.")
+    .with_label(
+        Label::new((source.filename, error.index..error.index))
+            .with_message("Invalid token starts here.")
+            .with_color(label_color),
+    )
+    .with_help("Check for invalid characters or malformed keywords and operators")
+    .finish()
+    .print((source.filename, Source::from(source.text)))
+    .unwrap();
 }
 
 pub fn report_parser_error(source: SourceFile, error: ParseError) {
@@ -104,7 +123,7 @@ pub fn report_parser_error(source: SourceFile, error: ParseError) {
         )
         .with_note(format!(
             "Expected one of: {}",
-            token_list_to_string(&possible_tokens)
+            list_to_string(&possible_tokens)
         ))
         .with_help("Check if your syntax is valid.")
         .finish(),
@@ -196,11 +215,167 @@ pub fn report_parser_error(source: SourceFile, error: ParseError) {
                 .with_color(colors.next()),
         )
         .with_label(
-            Label::new((source.filename, expected_semicolon_at..expected_semicolon_at))
-                .with_message("Expected semicolon to be here.")
-                .with_color(colors.next()),
+            Label::new((
+                source.filename,
+                expected_semicolon_at..expected_semicolon_at,
+            ))
+            .with_message("Expected semicolon to be here.")
+            .with_color(colors.next()),
         )
         .finish(),
+    }
+    .print((source.filename, Source::from(source.text)))
+    .unwrap();
+}
+
+struct ValueTypeDisplay(ValueType);
+impl Display for ValueTypeDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            ValueType::Integer => write!(f, "integer"),
+            ValueType::Float => write!(f, "float"),
+            ValueType::Boolean => write!(f, "boolean"),
+            ValueType::Function => write!(f, "function"),
+            ValueType::Nil => write!(f, "nil"),
+        }
+    }
+}
+impl From<ValueType> for ValueTypeDisplay {
+    fn from(value: ValueType) -> Self {
+        Self(value)
+    }
+}
+
+pub fn report_interpreter_error(source: SourceFile, error: crate::interpreter::InterpreterError) {
+    let mut colors = ColorGenerator::new();
+
+    match error {
+        InterpreterError::UnboundIdentifier { ident, span } => {
+            Report::build(ReportKind::Error, (source.filename, span.clone()))
+                .with_code(ErrorCode::InterpreterUnboundIdent)
+                .with_message(format!("Used unbound identifier: {ident}"))
+                .with_help(
+                    "Make sure to define the identifier as a function or variable before using it.",
+                )
+                .with_label(
+                    Label::new((source.filename, span))
+                        .with_color(colors.next())
+                        .with_message("This identifier is not bound to any value."),
+                )
+                .finish()
+        }
+        InterpreterError::NotAFunction { ident, span } => {
+            Report::build(ReportKind::Error, (source.filename, span.clone()))
+                .with_code(ErrorCode::InterpreterNotAFunction)
+                .with_message(format!(
+                    "Attempted to call {ident}, which is not a function."
+                ))
+                .with_help("Make sure to define the identifier as a function before using it.")
+                .with_note("Functions can be shadowed by variable definitions!")
+                .with_label(
+                    Label::new((source.filename, span))
+                        .with_color(colors.next())
+                        .with_message("This identifier is not bound to a function."),
+                )
+                .finish()
+        }
+        InterpreterError::InvalidType {
+            valid_types,
+            actual_type,
+            span,
+        } => Report::build(ReportKind::Error, (source.filename, span.clone()))
+            .with_code(ErrorCode::InterpreterInvalidType)
+            .with_message("An expression evaluated to an invalid type")
+            .with_note(format!(
+                "Expected a type of one of: {}",
+                list_to_string(
+                    &valid_types
+                        .into_iter()
+                        .map(ValueTypeDisplay::from)
+                        .collect::<Vec<_>>()
+                )
+            ))
+            .with_label(
+                Label::new((source.filename, span))
+                    .with_color(colors.next())
+                    .with_message(format!(
+                        "This expression evaluated to an invalid type: {}",
+                        ValueTypeDisplay(actual_type)
+                    )),
+            )
+            .finish(),
+        InterpreterError::MismatchedTypes {
+            lhs,
+            rhs,
+            lhs_span,
+            rhs_span,
+        } => Report::build(
+            ReportKind::Error,
+            (source.filename, lhs_span.start..rhs_span.end),
+        )
+        .with_code(ErrorCode::InterpreterMismatchedTypes)
+        .with_message(format!(
+            "The left and right hand sides of an operation are of different types: {} and {}",
+            ValueTypeDisplay(lhs),
+            ValueTypeDisplay(rhs)
+        ))
+        .with_help("Make sure both sides of the operation are of the same type.")
+        .with_label(
+            Label::new((source.filename, lhs_span))
+                .with_color(colors.next())
+                .with_message(format!(
+                    "This expression evaluated to type: {}",
+                    ValueTypeDisplay(lhs)
+                )),
+        )
+        .with_label(
+            Label::new((source.filename, rhs_span))
+                .with_color(colors.next())
+                .with_message(format!(
+                    "This expression evaluated to type: {}",
+                    ValueTypeDisplay(rhs)
+                )),
+        )
+        .finish(),
+        InterpreterError::IncorrectArgumentCount {
+            ident,
+            expected,
+            actual,
+            function_span,
+            arguments_span,
+        } => {
+            let mut report = Report::build(ReportKind::Error, (source.filename, function_span.clone()))
+                .with_code(ErrorCode::InterpreterIncorrectArgumentCount)
+                .with_message(format!(
+                    "Attempted to call {ident} with {actual} arguments, but {ident} takes {expected} arguments."
+                ))
+                .with_note("Functions must be called with the correct number of arguments.")
+                .with_label(
+                    Label::new((source.filename, function_span))
+                        .with_color(colors.next())
+                        .with_message(format!("This function takes {expected} arguments.")),
+                );
+            if let Some(arguments_span) = arguments_span {
+                report = report.with_label(
+                    Label::new((source.filename, arguments_span))
+                        .with_color(colors.next())
+                        .with_message(format!("This function was called with {actual} arguments.")),
+                );
+            }
+            report.finish()
+        },
+        InterpreterError::DivideByZero { span } => {
+            Report::build(ReportKind::Error, (source.filename, span.clone()))
+                .with_code(ErrorCode::InterpreterDivideByZero)
+                .with_message("Division by zero occured.".to_string())
+                .with_help("When possible, check for division by zero.")
+                .with_label(
+                    Label::new((source.filename, span))
+                        .with_color(colors.next())
+                        .with_message("Division by zero occured here."),
+                )
+                .finish()
+        },
     }
     .print((source.filename, Source::from(source.text)))
     .unwrap();

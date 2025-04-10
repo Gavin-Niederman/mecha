@@ -350,7 +350,7 @@ impl Interpreter {
                 if call_params.len() != function_params.len() {
                     return Err(InterpreterError::IncorrectArgumentCount {
                         ident: ident.value.ident,
-                        expected: call_params.len(),
+                        expected: function_params.len(),
                         actual: call_params.len(),
                         function_span: expr.span,
                         arguments_span: call_params.first().and_then(|start| {
@@ -408,7 +408,7 @@ impl Interpreter {
 
     fn visit_statement(&mut self, statement: Statement) -> Result<(), InterpreterError> {
         match statement.value {
-            StatementType::Return { expr } => todo!(),
+            StatementType::Return { expr: _expr } => todo!(),
             StatementType::FunctionDeclaration {
                 ident,
                 params,

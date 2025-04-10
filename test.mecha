@@ -5,7 +5,7 @@ fun hi_there(hi) {
 };
 
 let goo = 1;
-fun goop() {
+fun goop(hi) {
     let goo = 2;
     hi_there(10);
 };

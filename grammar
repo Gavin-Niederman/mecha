@@ -1,7 +1,8 @@
-statement      → return | decl | devalued
+statement      → return | decl | function | assignment | devalued
 return         → "return" expression ";"
 decl           → "let" IDENT "=" expression ";"
 function       → "fun" IDENT "(" (IDENT ",")* ")" block
+assignment     → IDENT "=" expression ";"
 devalued       → expression ";"
 
 expression     → if
