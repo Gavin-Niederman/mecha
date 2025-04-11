@@ -8,10 +8,10 @@ mod native;
 pub mod value;
 
 use crate::{
-    Span, Spanned,
+    Span,
     parser::{
         Ast, Block, ComparisonOperator, EqualityOperator, Expr, ExprType, FactorOperator,
-        Identifier, Statement, StatementType, TermOperator, Terminal, UnaryOperator,
+        Statement, StatementType, TermOperator, Terminal, UnaryOperator,
     },
 };
 

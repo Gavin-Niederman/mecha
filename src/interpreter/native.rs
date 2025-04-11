@@ -1,5 +1,3 @@
-use crate::Span;
-
 use super::{InterpreterError, value::Value};
 
 fn print(args: &[Value]) -> Result<Value, InterpreterError> {
