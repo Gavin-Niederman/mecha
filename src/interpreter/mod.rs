@@ -1,94 +1,19 @@
 use std::collections::{BTreeMap, HashMap};
 
+use native::fill_scope_with_native_functions;
 use snafu::Snafu;
+use value::{Value, ValueType, check_values_valid_for_math};
+
+mod native;
+pub mod value;
 
 use crate::{
-    Span,
+    Span, Spanned,
     parser::{
         Ast, Block, ComparisonOperator, EqualityOperator, Expr, ExprType, FactorOperator,
-        Statement, StatementType, TermOperator, Terminal, UnaryOperator,
+        Identifier, Statement, StatementType, TermOperator, Terminal, UnaryOperator,
     },
 };
-
-#[derive(Debug, Clone, PartialEq)]
-enum Value {
-    Nil,
-    Boolean(bool),
-    Float(f64),
-    Integer(i64),
-    Function {
-        params: Vec<String>,
-        body: Block,
-        defined_in_scope: u64,
-    },
-}
-impl Value {
-    pub const fn value_type(&self) -> ValueType {
-        match self {
-            Value::Nil => ValueType::Nil,
-            Value::Boolean(_) => ValueType::Boolean,
-            Value::Float(_) => ValueType::Float,
-            Value::Integer(_) => ValueType::Integer,
-            Value::Function { .. } => ValueType::Function,
-        }
-    }
-
-    fn check_typed_correctly(
-        &self,
-        valid_types: &[ValueType],
-        span: Span,
-    ) -> Result<(), InterpreterError> {
-        let value_type = self.value_type();
-        valid_types
-            .contains(&value_type)
-            .then_some(())
-            .ok_or(InterpreterError::InvalidType {
-                valid_types: valid_types.to_vec(),
-                actual_type: value_type,
-                span,
-            })
-    }
-}
-
-fn check_values_same_type(
-    left: &Value,
-    right: &Value,
-    left_span: Span,
-    right_span: Span,
-) -> Result<(), InterpreterError> {
-    if left.value_type() == right.value_type() {
-        Ok(())
-    } else {
-        Err(InterpreterError::MismatchedTypes {
-            lhs: left.value_type(),
-            rhs: right.value_type(),
-            lhs_span: left_span,
-            rhs_span: right_span,
-        })
-    }
-}
-
-fn check_values_valid_for_math(
-    left: &Value,
-    right: &Value,
-    left_span: Span,
-    right_span: Span,
-) -> Result<(), InterpreterError> {
-    left.check_typed_correctly(&[ValueType::Float, ValueType::Integer], left_span.clone())?;
-    right.check_typed_correctly(&[ValueType::Float, ValueType::Integer], right_span.clone())?;
-    check_values_same_type(left, right, left_span, right_span)?;
-
-    Ok(())
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ValueType {
-    Nil,
-    Boolean,
-    Float,
-    Integer,
-    Function,
-}
 
 #[derive(Debug, Clone, PartialEq)]
 struct Scope {
@@ -146,7 +71,11 @@ impl Interpreter {
             scopes: BTreeMap::new(),
             ast,
         };
-        this.push_scope(Scope::new(None));
+
+        let mut global_scope = Scope::new(None);
+        fill_scope_with_native_functions(&mut global_scope);
+        this.push_scope(global_scope);
+
         this
     }
 
@@ -211,7 +140,11 @@ impl Interpreter {
         let super_scope = self.super_scope();
 
         match expr.value {
-            ExprType::If { condition, body } => {
+            ExprType::If {
+                condition,
+                body,
+                else_body,
+            } => {
                 let condition_value = self.visit_expr(*condition.clone())?;
                 condition_value.check_typed_correctly(&[ValueType::Boolean], condition.span)?;
                 let Value::Boolean(condition) = condition_value else {
@@ -219,7 +152,9 @@ impl Interpreter {
                 };
 
                 if condition {
-                    self.visit_block(body.value)
+                    self.visit_expr(body.into())
+                } else if let Some(else_body) = else_body {
+                    self.visit_expr(else_body.into())
                 } else {
                     Ok(Value::Nil)
                 }
@@ -335,48 +270,85 @@ impl Interpreter {
                 ident,
                 params: call_params,
             } => {
-                let Value::Function {
-                    params: function_params,
-                    body: function_body,
-                    defined_in_scope,
-                } = super_scope.get(&ident.value.ident, ident.span)?
-                else {
-                    return Err(InterpreterError::NotAFunction {
+                fn check_call_arity(
+                    ident: String,
+                    actual: usize,
+                    expected: usize,
+                    function_span: Span,
+                    arguments_span: Option<Span>,
+                ) -> Result<(), InterpreterError> {
+                    if actual != expected {
+                        return Err(InterpreterError::IncorrectArgumentCount {
+                            ident,
+                            expected,
+                            actual,
+                            function_span,
+                            arguments_span,
+                        });
+                    }
+                    Ok(())
+                }
+
+                match super_scope.get(&ident.value.ident, ident.span)? {
+                    Value::Function {
+                        params: function_params,
+                        body: function_body,
+                        defined_in_scope,
+                    } => {
+                        check_call_arity(
+                            ident.value.ident,
+                            call_params.len(),
+                            function_params.len(),
+                            expr.span,
+                            call_params.first().and_then(|start| {
+                                call_params
+                                    .last()
+                                    .map(|last| start.span.start..last.span.end)
+                            }),
+                        )?;
+
+                        let mut new_scope = Scope::new(Some(defined_in_scope));
+                        for (param, arg) in function_params.iter().zip(call_params.iter()) {
+                            let value = self.visit_expr(arg.clone())?;
+                            new_scope.values.insert(param.clone(), value);
+                        }
+
+                        let old_top_scope = self.top_scope;
+                        self.top_scope = defined_in_scope;
+
+                        self.push_scope(new_scope);
+
+                        let return_value = self.visit_block(function_body)?;
+                        self.pop_scope();
+                        self.top_scope = old_top_scope;
+
+                        Ok(return_value)
+                    }
+                    Value::NativeFunction { num_params, body } => {
+                        check_call_arity(
+                            ident.value.ident,
+                            call_params.len(),
+                            num_params,
+                            expr.span,
+                            call_params.first().and_then(|start| {
+                                call_params
+                                    .last()
+                                    .map(|last| start.span.start..last.span.end)
+                            }),
+                        )?;
+
+                        body(
+                            &call_params
+                                .into_iter()
+                                .map(|param| self.visit_expr(param))
+                                .collect::<Result<Vec<_>, _>>()?,
+                        )
+                    }
+                    _ => Err(InterpreterError::NotAFunction {
                         ident: ident.value.ident,
                         span: expr.span,
-                    });
-                };
-
-                if call_params.len() != function_params.len() {
-                    return Err(InterpreterError::IncorrectArgumentCount {
-                        ident: ident.value.ident,
-                        expected: function_params.len(),
-                        actual: call_params.len(),
-                        function_span: expr.span,
-                        arguments_span: call_params.first().and_then(|start| {
-                            call_params
-                                .last()
-                                .map(|last| start.span.start..last.span.end)
-                        }),
-                    });
+                    }),
                 }
-
-                let mut new_scope = Scope::new(Some(defined_in_scope));
-                for (param, arg) in function_params.iter().zip(call_params.iter()) {
-                    let value = self.visit_expr(arg.clone())?;
-                    new_scope.values.insert(param.clone(), value);
-                }
-
-                let old_top_scope = self.top_scope;
-                self.top_scope = defined_in_scope;
-
-                self.push_scope(new_scope);
-
-                let return_value = self.visit_block(function_body)?;
-                self.pop_scope();
-                self.top_scope = old_top_scope;
-
-                Ok(return_value)
             }
             ExprType::Terminal(terminal) => match terminal {
                 Terminal::Nil => Ok(Value::Nil),
@@ -414,10 +386,7 @@ impl Interpreter {
                 params,
                 body,
             } => {
-                let params = params
-                    .into_iter()
-                    .map(|param| param.value.ident)
-                    .collect();
+                let params = params.into_iter().map(|param| param.value.ident).collect();
 
                 let function_value = Value::Function {
                     params,

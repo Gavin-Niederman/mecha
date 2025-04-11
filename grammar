@@ -7,7 +7,7 @@ devalued       → expression ";"
 
 expression     → if
 
-if             → "if" "(" equality ")" block
+if             → "if" "(" equality ")" block ( "else" block )?
 if             → equality
 
 disjunction    → conjunction "||" disjunction 

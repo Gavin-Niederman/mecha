@@ -3,7 +3,7 @@ use std::fmt::Display;
 use ariadne::{ColorGenerator, Label, Report, ReportKind, Source};
 
 use crate::{
-    interpreter::{InterpreterError, ValueType},
+    interpreter::{InterpreterError, value::ValueType},
     lexer::LexerError,
     parser::ParseError,
 };

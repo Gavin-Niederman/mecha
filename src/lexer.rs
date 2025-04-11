@@ -163,6 +163,8 @@ token_type! {
         // Keywords
         #[text = "'if'"]
         If,
+        #[text = "'else'"]
+        Else,
         #[text = "'let'"]
         Let,
         #[text = "'return'"]
@@ -309,6 +311,9 @@ impl Token {
 
             Token::If => {
                 keyword!("if" @ text_iter);
+            }
+            Token::Else => {
+                keyword!("else" @ text_iter);
             }
             Token::Let => {
                 keyword!("let" @ text_iter);

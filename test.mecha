@@ -1,13 +1,10 @@
-fun hi_there(hi) {
-    if (hi > 1) {
-        hi_there(hi - 1)
-    };
+fun recurse(depth, max_depth) {
+    if (depth > max_depth) {
+        nil
+    } else {
+        print(depth);
+        recurse(depth + 1, max_depth)
+    }
 };
 
-let goo = 1;
-fun goop(hi) {
-    let goo = 2;
-    hi_there(10);
-};
-
-goop();    
+recurse(0, 1000);

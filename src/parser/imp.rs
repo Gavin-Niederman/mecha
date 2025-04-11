@@ -157,11 +157,22 @@ impl Parser<'_> {
 
         let body = self.parse_block()?;
 
+        let else_body = if self.require_token(Token::Else).is_ok() {
+            Some(self.parse_block()?)
+        } else {
+            None
+        };
+
         Ok(Expr {
-            span: if_lex.span.start..body.span.end,
+            span: if_lex.span.start
+                ..else_body
+                    .as_ref()
+                    .map(|body| body.span.end)
+                    .unwrap_or(body.span.end),
             value: ExprType::If {
                 condition: Box::new(condition),
                 body,
+                else_body,
             },
         })
     }

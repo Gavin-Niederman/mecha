@@ -25,6 +25,7 @@ pub enum ExprType {
     If {
         condition: Box<Expr>,
         body: Spanned<Block>,
+        else_body: Option<Spanned<Block>>,
     },
 
     Equality {

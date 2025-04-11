@@ -28,6 +28,7 @@ enum EdgeType {
     Rhs,
     Cond,
     Body,
+    Else,
     Expr,
     Param,
 
@@ -71,6 +72,7 @@ impl<'a> dot::Labeller<'a, Node, Edge> for Graph {
             EdgeType::Rhs => dot::LabelText::label("rhs"),
             EdgeType::Cond => dot::LabelText::label("cond"),
             EdgeType::Body => dot::LabelText::label("body"),
+            EdgeType::Else => dot::LabelText::label("else"),
             EdgeType::Expr => dot::LabelText::label("expr"),
             EdgeType::Param => dot::LabelText::label("param"),
             EdgeType::ContainedStatement => dot::LabelText::label("contained"),
@@ -135,10 +137,23 @@ fn build_graph(ast: Ast) -> Graph {
 
     fn build_from_expr(graph: &mut Graph, expr: Expr) -> usize {
         match expr.value {
-            ExprType::If { condition, body } => {
+            ExprType::If {
+                condition,
+                body,
+                else_body,
+            } => {
                 let if_id = push_node(graph, NodeType::If);
                 let cond_id = build_from_expr(graph, *condition);
                 let body_id = build_from_expr(graph, body.into());
+
+                if let Some(else_body) = else_body {
+                    let else_id = build_from_expr(graph, else_body.into());
+                    graph.edges.push(Edge {
+                        from: if_id,
+                        to: else_id,
+                        edge_type: EdgeType::Else,
+                    });
+                }
 
                 graph.edges.push(Edge {
                     from: if_id,
