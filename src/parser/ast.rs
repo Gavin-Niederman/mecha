@@ -77,6 +77,10 @@ pub enum Terminal {
     Boolean(bool),
     Float(f64),
     Integer(i64),
+    Closure {
+        params: Vec<Spanned<Identifier>>,
+        body: Spanned<Block>,
+    },
     Ident(Identifier)
 }
 

@@ -307,33 +307,31 @@ pub fn report_interpreter_error(source: SourceFile, error: crate::interpreter::I
         InterpreterError::MismatchedTypes {
             lhs,
             rhs,
-            lhs_span,
-            rhs_span,
         } => Report::build(
             ReportKind::Error,
-            (source.filename, lhs_span.start..rhs_span.end),
+            (source.filename, lhs.span.start..rhs.span.end),
         )
         .with_code(ErrorCode::InterpreterMismatchedTypes)
         .with_message(format!(
             "The left and right hand sides of an operation are of different types: {} and {}",
-            ValueTypeDisplay(lhs),
-            ValueTypeDisplay(rhs)
+            ValueTypeDisplay(lhs.value),
+            ValueTypeDisplay(rhs.value)
         ))
         .with_help("Make sure both sides of the operation are of the same type.")
         .with_label(
-            Label::new((source.filename, lhs_span))
+            Label::new((source.filename, lhs.span))
                 .with_color(colors.next())
                 .with_message(format!(
                     "This expression evaluated to type: {}",
-                    ValueTypeDisplay(lhs)
+                    ValueTypeDisplay(lhs.value)
                 )),
         )
         .with_label(
-            Label::new((source.filename, rhs_span))
+            Label::new((source.filename, rhs.span))
                 .with_color(colors.next())
                 .with_message(format!(
                     "This expression evaluated to type: {}",
-                    ValueTypeDisplay(rhs)
+                    ValueTypeDisplay(rhs.value)
                 )),
         )
         .finish(),

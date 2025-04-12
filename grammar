@@ -1,7 +1,7 @@
 statement      → return | decl | function | assignment | devalued
 return         → "return" expression ";"
 decl           → "let" IDENT "=" expression ";"
-function       → "fun" IDENT "(" (IDENT ",")* ")" block
+function       → "\" IDENT "(" (IDENT ",")* ")" block
 assignment     → IDENT "=" expression ";"
 devalued       → expression ";"
 
@@ -25,6 +25,7 @@ primary        → call
 primary        → terminal
 primary        → "(" expression ")"
 primary        → block
+primary        → "\" "(" (IDENT ",")* ")" block
 
 call           → IDENT "(" (expression ",")* ")" 
 terminal       → NUMBER | STRING | "true" | "false" | "nil" | IDENT

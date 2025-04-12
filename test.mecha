@@ -1,10 +1,17 @@
-fun recurse(depth, max_depth) {
-    if (depth > max_depth) {
-        nil
-    } else {
-        print(depth);
-        recurse(depth + 1, max_depth)
+\curry_add(lhs) {
+    \(rhs) {
+        lhs + rhs
     }
 };
 
-recurse(0, 1000);
+let add = curry_add(1);
+let result = add(1);
+
+\recurse_deep(n, max_depth) {
+    if (n <= max_depth) {
+        print(n);
+        recurse_deep(n + 1, max_depth)
+    }
+};
+
+recurse_deep(1, 500000);

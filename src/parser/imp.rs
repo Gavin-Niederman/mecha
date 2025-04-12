@@ -22,7 +22,7 @@ impl Parser<'_> {
         }
 
         match self
-            .consume_lexeme_of_type(&[Token::Let, Token::Return, Token::Fun])
+            .consume_lexeme_of_type(&[Token::Let, Token::Return, Token::Closure])
             .cloned()
         {
             Some(
@@ -64,7 +64,8 @@ impl Parser<'_> {
             }
             Some(
                 fun_lexeme @ Lexeme {
-                    value: Token::Fun, ..
+                    value: Token::Closure,
+                    ..
                 },
             ) => {
                 let ident = self.require_token(Token::Identifier)?;
@@ -75,35 +76,7 @@ impl Parser<'_> {
                     },
                 };
 
-                let Some(paren_open) = self.consume_lexeme_of_type(&[Token::LeftParen]).cloned()
-                else {
-                    return Err(ParseError::UnexpectedLexeme {
-                        unexpected_lexeme: self.lexemes[self.location].clone(),
-                        possible_tokens: vec![Token::LeftParen],
-                    });
-                };
-
-                let mut params = vec![];
-                while let Ok(param) = self.require_token(Token::Identifier) {
-                    let param = Spanned {
-                        span: param.span.clone(),
-                        value: Identifier {
-                            ident: self.text[param.span.clone()].to_string(),
-                        },
-                    };
-                    params.push(param);
-                    if self.consume_lexeme_of_type(&[Token::Comma]).is_none() {
-                        break;
-                    }
-                }
-
-                self.consume_lexeme_of_type(&[Token::RightParen])
-                    .ok_or_else(|| ParseError::UnclosedDelimiter {
-                        delimiter: Token::LeftParen,
-                        start: paren_open.clone(),
-                    })?;
-
-                let block = self.parse_block()?;
+                let (params, block) = self.parse_closure()?;
 
                 let semicolon = parse_semicolon(self, fun_lexeme.span.start..block.span.end)?;
 
@@ -126,6 +99,39 @@ impl Parser<'_> {
                 })
             }
         }
+    }
+
+    fn parse_closure(&mut self) -> ParseResult<(Vec<Spanned<Identifier>>, Spanned<Block>)> {
+        let Some(paren_open) = self.consume_lexeme_of_type(&[Token::LeftParen]).cloned() else {
+            return Err(ParseError::UnexpectedLexeme {
+                unexpected_lexeme: self.lexemes[self.location].clone(),
+                possible_tokens: vec![Token::LeftParen],
+            });
+        };
+
+        let mut params = vec![];
+        while let Ok(param) = self.require_token(Token::Identifier) {
+            let param = Spanned {
+                span: param.span.clone(),
+                value: Identifier {
+                    ident: self.text[param.span.clone()].to_string(),
+                },
+            };
+            params.push(param);
+            if self.consume_lexeme_of_type(&[Token::Comma]).is_none() {
+                break;
+            }
+        }
+
+        self.consume_lexeme_of_type(&[Token::RightParen])
+            .ok_or_else(|| ParseError::UnclosedDelimiter {
+                delimiter: Token::LeftParen,
+                start: paren_open.clone(),
+            })?;
+
+        let block = self.parse_block()?;
+
+        Ok((params, block))
     }
 
     #[inline]
@@ -359,6 +365,23 @@ impl Parser<'_> {
                         },
                         params,
                     },
+                })
+            }
+            Some(
+                fun @ Lexeme {
+                    value: Token::Closure,
+                    ..
+                },
+            ) => {
+                self.advance_lexeme();
+                let (params, block) = self.parse_closure()?;
+
+                Ok(Expr {
+                    span: fun.span.start..block.span.end,
+                    value: ExprType::Terminal(Terminal::Closure {
+                        params,
+                        body: block,
+                    }),
                 })
             }
             _ => self.parse_terminal(),

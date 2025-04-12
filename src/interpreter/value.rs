@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{Span, parser::Block};
+use crate::{Span, Spanned, parser::Block};
 
 use super::InterpreterError;
 
@@ -47,6 +47,56 @@ impl Value {
                 span,
             })
     }
+
+    pub fn as_bool(&self, span: Span) -> Result<bool, InterpreterError> {
+        match self {
+            Value::Boolean(b) => Ok(*b),
+            _ => Err(InterpreterError::InvalidType {
+                valid_types: vec![ValueType::Boolean],
+                actual_type: self.value_type(),
+                span,
+            }),
+        }
+    }
+    pub fn as_float(&self, span: Span) -> Result<f64, InterpreterError> {
+        match self {
+            Value::Float(b) => Ok(*b),
+            _ => Err(InterpreterError::InvalidType {
+                valid_types: vec![ValueType::Float],
+                actual_type: self.value_type(),
+                span,
+            }),
+        }
+    }
+    pub fn as_integer(&self, span: Span) -> Result<i64, InterpreterError> {
+        match self {
+            Value::Integer(b) => Ok(*b),
+            _ => Err(InterpreterError::InvalidType {
+                valid_types: vec![ValueType::Integer],
+                actual_type: self.value_type(),
+                span,
+            }),
+        }
+    }
+}
+impl Spanned<Value> {
+    pub const fn value_type(&self) -> ValueType {
+        self.value.value_type()
+    }
+
+    pub fn check_typed_correctly(&self, valid_types: &[ValueType]) -> Result<(), InterpreterError> {
+        self.value
+            .check_typed_correctly(valid_types, self.span.clone())
+    }
+    pub fn as_bool(&self) -> Result<bool, InterpreterError> {
+        self.value.as_bool(self.span.clone())
+    }
+    pub fn into_float(self) -> Result<f64, InterpreterError> {
+        self.value.as_float(self.span.clone())
+    }
+    pub fn into_integer(self) -> Result<i64, InterpreterError> {
+        self.value.as_integer(self.span.clone())
+    }
 }
 
 impl Display for Value {
@@ -67,32 +117,32 @@ impl Display for Value {
 }
 
 pub fn check_values_same_type(
-    left: &Value,
-    right: &Value,
-    left_span: Span,
-    right_span: Span,
+    left: &Spanned<Value>,
+    right: &Spanned<Value>,
 ) -> Result<(), InterpreterError> {
     if left.value_type() == right.value_type() {
         Ok(())
     } else {
         Err(InterpreterError::MismatchedTypes {
-            lhs: left.value_type(),
-            rhs: right.value_type(),
-            lhs_span: left_span,
-            rhs_span: right_span,
+            lhs: Spanned {
+                span: left.span.clone(),
+                value: left.value_type(),
+            },
+            rhs: Spanned {
+                span: right.span.clone(),
+                value: right.value_type(),
+            },
         })
     }
 }
 
 pub fn check_values_valid_for_math(
-    left: &Value,
-    right: &Value,
-    left_span: Span,
-    right_span: Span,
+    left: &Spanned<Value>,
+    right: &Spanned<Value>,
 ) -> Result<(), InterpreterError> {
-    left.check_typed_correctly(&[ValueType::Float, ValueType::Integer], left_span.clone())?;
-    right.check_typed_correctly(&[ValueType::Float, ValueType::Integer], right_span.clone())?;
-    check_values_same_type(left, right, left_span, right_span)?;
+    left.check_typed_correctly(&[ValueType::Float, ValueType::Integer])?;
+    right.check_typed_correctly(&[ValueType::Float, ValueType::Integer])?;
+    check_values_same_type(left, right)?;
 
     Ok(())
 }
