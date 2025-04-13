@@ -4,6 +4,7 @@ decl           → "let" IDENT "=" expression ";"
 function       → "\" IDENT "(" (IDENT ",")* ")" block
 assignment     → IDENT "=" expression ";"
 devalued       → expression ";"
+while          → "while" expression block ";"
 
 expression     → if
 

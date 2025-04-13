@@ -115,6 +115,10 @@ enum Frame {
         body: Spanned<Block>,
         else_body: Option<Spanned<Block>>,
     },
+    While {
+        condition: Expr,
+        body: Spanned<Block>
+    },
 
     DevalueExpr,
     Declare {
@@ -124,10 +128,14 @@ enum Frame {
 
 impl Interpreter {
     pub fn visit_statement(&mut self, statement: Statement) -> Result<(), InterpreterError> {
-        let mut expr_stack = vec![Frame::EvaluateStatement(statement)];
+        // Used to step the interpreter
+        let mut command_stack = vec![Frame::EvaluateStatement(statement)];
+        // Stack of finished values
         let mut value_stack = vec![];
+        // Stack of function block ids
+        let mut function_stack = vec![];
 
-        while let Some(frame) = expr_stack.pop() {
+        while let Some(frame) = command_stack.pop() {
             let super_scope = self.super_scope();
 
             match frame {
@@ -164,7 +172,10 @@ impl Interpreter {
                         // This scope depends on itself due to the closure.
                         // This means it can literally never be dropped.
                         // A better solution would remove this cyclic dependency when the closure is not used.
-                        self.scopes.get_mut(&self.top_scope).unwrap().reference_count += 1;
+                        self.scopes
+                            .get_mut(&self.top_scope)
+                            .unwrap()
+                            .reference_count += 1;
                     }
                 },
 
@@ -172,19 +183,19 @@ impl Interpreter {
                     span,
                     value: ExprType::Call { ident, params },
                 }) => {
-                    expr_stack.push(Frame::CallStart {
+                    command_stack.push(Frame::CallStart {
                         span,
                         ident: ident.clone(),
                         num_args: params.len(),
                     });
 
-                    expr_stack.push(Frame::EvaluateExpr(Expr {
+                    command_stack.push(Frame::EvaluateExpr(Expr {
                         value: ExprType::Terminal(Terminal::Ident(ident.value)),
                         span: ident.span,
                     }));
 
                     for param in params {
-                        expr_stack.push(Frame::EvaluateExpr(param));
+                        command_stack.push(Frame::EvaluateExpr(param));
                     }
                 }
                 Frame::EvaluateExpr(Expr {
@@ -193,15 +204,16 @@ impl Interpreter {
                 }) => {
                     self.push_scope(Scope::new(Some(self.top_scope)));
 
-                    expr_stack.push(Frame::ScopeEnd);
+                    command_stack.push(Frame::ScopeEnd);
 
                     if let Some(ret) = block.ret {
-                        expr_stack.push(Frame::EvaluateExpr(*ret));
+                        command_stack.push(Frame::EvaluateExpr(*ret));
                     }
-                    expr_stack.extend(
+                    command_stack.extend(
                         block
                             .statements
                             .into_iter()
+                            .rev()
                             .map(Frame::EvaluateStatement),
                     );
                 }
@@ -218,77 +230,92 @@ impl Interpreter {
                             else_body,
                         },
                 }) => {
-                    expr_stack.push(Frame::If {
+                    command_stack.push(Frame::If {
                         span,
                         body,
                         else_body,
                     });
 
-                    expr_stack.push(Frame::EvaluateExpr(*condition));
+                    command_stack.push(Frame::EvaluateExpr(*condition));
                 }
 
                 Frame::EvaluateExpr(Expr {
                     span: _,
                     value: ExprType::Unary { operator, rhs },
                 }) => {
-                    expr_stack.push(Frame::ApplyUnaryOp(operator.value));
-                    expr_stack.push(Frame::EvaluateExpr(*rhs));
+                    command_stack.push(Frame::ApplyUnaryOp(operator.value));
+                    command_stack.push(Frame::EvaluateExpr(*rhs));
                 }
                 Frame::EvaluateExpr(Expr {
                     span: _,
                     value: ExprType::Disjunction { lhs, rhs },
                 }) => {
-                    expr_stack.push(Frame::ApplyBinop(BinaryOperator::Disjunction));
-                    expr_stack.push(Frame::EvaluateExpr(*lhs));
-                    expr_stack.push(Frame::EvaluateExpr(*rhs));
+                    command_stack.push(Frame::ApplyBinop(BinaryOperator::Disjunction));
+                    command_stack.push(Frame::EvaluateExpr(*lhs));
+                    command_stack.push(Frame::EvaluateExpr(*rhs));
                 }
                 Frame::EvaluateExpr(Expr {
                     span: _,
                     value: ExprType::Conjunction { lhs, rhs },
                 }) => {
-                    expr_stack.push(Frame::ApplyBinop(BinaryOperator::Conjunction));
-                    expr_stack.push(Frame::EvaluateExpr(*lhs));
-                    expr_stack.push(Frame::EvaluateExpr(*rhs));
+                    command_stack.push(Frame::ApplyBinop(BinaryOperator::Conjunction));
+                    command_stack.push(Frame::EvaluateExpr(*lhs));
+                    command_stack.push(Frame::EvaluateExpr(*rhs));
                 }
                 Frame::EvaluateExpr(Expr {
                     span: _,
                     value: ExprType::Equality { lhs, operator, rhs },
                 }) => {
-                    expr_stack.push(Frame::ApplyBinop(operator.value.into()));
-                    expr_stack.push(Frame::EvaluateExpr(*lhs));
-                    expr_stack.push(Frame::EvaluateExpr(*rhs));
+                    command_stack.push(Frame::ApplyBinop(operator.value.into()));
+                    command_stack.push(Frame::EvaluateExpr(*lhs));
+                    command_stack.push(Frame::EvaluateExpr(*rhs));
                 }
                 Frame::EvaluateExpr(Expr {
                     span: _,
                     value: ExprType::Comparison { lhs, operator, rhs },
                 }) => {
-                    expr_stack.push(Frame::ApplyBinop(operator.value.into()));
-                    expr_stack.push(Frame::EvaluateExpr(*lhs));
-                    expr_stack.push(Frame::EvaluateExpr(*rhs));
+                    command_stack.push(Frame::ApplyBinop(operator.value.into()));
+                    command_stack.push(Frame::EvaluateExpr(*lhs));
+                    command_stack.push(Frame::EvaluateExpr(*rhs));
                 }
                 Frame::EvaluateExpr(Expr {
                     span: _,
                     value: ExprType::Term { lhs, operator, rhs },
                 }) => {
-                    expr_stack.push(Frame::ApplyBinop(operator.value.into()));
-                    expr_stack.push(Frame::EvaluateExpr(*lhs));
-                    expr_stack.push(Frame::EvaluateExpr(*rhs));
+                    command_stack.push(Frame::ApplyBinop(operator.value.into()));
+                    command_stack.push(Frame::EvaluateExpr(*lhs));
+                    command_stack.push(Frame::EvaluateExpr(*rhs));
                 }
                 Frame::EvaluateExpr(Expr {
                     span: _,
                     value: ExprType::Factor { lhs, operator, rhs },
                 }) => {
-                    expr_stack.push(Frame::ApplyBinop(operator.value.into()));
-                    expr_stack.push(Frame::EvaluateExpr(*lhs));
-                    expr_stack.push(Frame::EvaluateExpr(*rhs));
+                    command_stack.push(Frame::ApplyBinop(operator.value.into()));
+                    command_stack.push(Frame::EvaluateExpr(*lhs));
+                    command_stack.push(Frame::EvaluateExpr(*rhs));
                 }
 
                 // Statements
                 Frame::EvaluateStatement(Statement {
-                    span: _,
+                    span: _span,
                     value: statement_type,
                 }) => match statement_type {
-                    StatementType::Return { expr: _expr } => todo!(),
+                    StatementType::Return { expr } => {
+                        let call_outer_scope = function_stack.pop().unwrap();
+                        let call_end_frame = command_stack
+                            .iter()
+                            .rev()
+                            .position(|frame| matches!(frame, Frame::CallEnd { original_top_scope } if *original_top_scope == call_outer_scope))
+                            .unwrap();
+                        command_stack.truncate(call_end_frame - 1);
+
+                        command_stack.push(Frame::EvaluateExpr(expr));
+                    }
+                    StatementType::While { condition, body } => {
+                        command_stack.push(Frame::While { condition: *condition.clone(), body: body.clone() });
+
+                        command_stack.push(Frame::EvaluateExpr(*condition));
+                    }
                     StatementType::FunctionDeclaration {
                         ident,
                         params,
@@ -307,12 +334,12 @@ impl Interpreter {
                             .insert(ident.value.ident, function_value);
                     }
                     StatementType::Decleration { ident, value } => {
-                        expr_stack.push(Frame::Declare { ident });
-                        expr_stack.push(Frame::EvaluateExpr(value));
+                        command_stack.push(Frame::Declare { ident });
+                        command_stack.push(Frame::EvaluateExpr(value));
                     }
                     StatementType::DevaluedExpr { expr } => {
-                        expr_stack.push(Frame::DevalueExpr);
-                        expr_stack.push(Frame::EvaluateExpr(expr));
+                        command_stack.push(Frame::DevalueExpr);
+                        command_stack.push(Frame::EvaluateExpr(expr));
                     }
                 },
 
@@ -474,23 +501,14 @@ impl Interpreter {
                             self.top_scope = defined_in_scope;
 
                             self.push_scope(new_scope);
+                            function_stack.push(original_top_scope);
 
-                            expr_stack.push(Frame::CallEnd { original_top_scope });
-                            expr_stack.push(Frame::EvaluateExpr(
+                            command_stack.push(Frame::CallEnd { original_top_scope });
+                            command_stack.push(Frame::EvaluateExpr(
                                 ExprType::Block(function_body).spanned(span),
                             ));
                         }
-                        Value::NativeFunction { num_params, body } => {
-                            check_call_arity(
-                                ident.value.ident,
-                                num_args,
-                                num_params,
-                                span.clone(),
-                                args.first().and_then(|start| {
-                                    args.last().map(|last| start.span.start..last.span.end)
-                                }),
-                            )?;
-
+                        Value::NativeFunction { body } => {
                             value_stack.push(
                                 body(&args.into_iter().map(|arg| arg.value).collect::<Vec<_>>())?
                                     .spanned(span),
@@ -505,7 +523,7 @@ impl Interpreter {
                     }
                 }
                 Frame::CallEnd { original_top_scope } => {
-                    // self.garbage_collect_scopes();
+                    function_stack.pop().unwrap();
                     self.top_scope = original_top_scope;
                 }
                 Frame::If {
@@ -517,15 +535,32 @@ impl Interpreter {
 
                     let condition = condition.as_bool()?;
                     if condition {
-                        expr_stack.push(Frame::EvaluateExpr(
+                        command_stack.push(Frame::EvaluateExpr(
                             ExprType::Block(body.value).spanned(span),
                         ));
                     } else if let Some(else_body) = else_body {
-                        expr_stack.push(Frame::EvaluateExpr(
+                        command_stack.push(Frame::EvaluateExpr(
                             ExprType::Block(else_body.value).spanned(span),
                         ));
                     } else {
                         value_stack.push(Value::Nil.spanned(span));
+                    }
+                }
+                Frame::While { condition, body } => {
+                    let condition_res = value_stack.pop().unwrap();
+                    let condition_res = condition_res.as_bool()?;
+
+                    if condition_res {
+                        command_stack.push(Frame::While {
+                            condition: condition.clone(),
+                            body: body.clone(),
+                        });
+
+                        command_stack.push(Frame::EvaluateExpr(condition));
+
+                        // Loop body and throw away the result of the block
+                        command_stack.push(Frame::DevalueExpr);
+                        command_stack.push(Frame::EvaluateExpr(ExprType::Block(body.value).spanned(body.span)));
                     }
                 }
 

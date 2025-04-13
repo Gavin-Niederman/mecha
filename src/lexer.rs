@@ -169,6 +169,8 @@ token_type! {
         Let,
         #[text = "'return'"]
         Return,
+        #[text = "'while'"]
+        While,
         #[text = "'\\'"]
         Closure,
 
@@ -320,6 +322,9 @@ impl Token {
             }
             Token::Return => {
                 keyword!("return" @ text_iter);
+            }
+            Token::While => {
+                keyword!("while" @ text_iter);
             }
             Token::Closure => {
                 keyword!("\\" @ text_iter);

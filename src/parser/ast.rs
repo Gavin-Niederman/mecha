@@ -9,6 +9,10 @@ pub type Statement = Spanned<StatementType>;
 #[derive(Debug, Clone, PartialEq)]
 pub enum StatementType {
     Return { expr: Expr },
+    While {
+        condition: Box<Expr>,
+        body: Spanned<Block>,
+    },
     FunctionDeclaration {
         ident: Spanned<Identifier>,
         params: Vec<Spanned<Identifier>>,

@@ -295,6 +295,26 @@ fn build_graph(ast: Ast) -> Graph {
 
                 stmt_id
             }
+            StatementType::While { condition, body } => {
+                let cond_id = build_from_expr(graph, *condition);
+                let body_id = build_from_expr(graph, body.into());
+
+                let stmt_id = push_node(graph, NodeType::Statement {
+                    name: "While".to_string(),
+                });
+                graph.edges.push(Edge {
+                    from: stmt_id,
+                    to: cond_id,
+                    edge_type: EdgeType::Cond,
+                });
+                graph.edges.push(Edge {
+                    from: stmt_id,
+                    to: body_id,
+                    edge_type: EdgeType::Body,
+                });
+
+                stmt_id
+            }
             StatementType::Decleration { ident, value } => {
                 let stmt_id = push_node(graph, NodeType::Statement {
                     name: format!("Assign {}", ident.value.ident),

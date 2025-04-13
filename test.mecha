@@ -1,6 +1,6 @@
 \curry_add(lhs) {
     \(rhs) {
-        lhs + rhs
+        return (lhs + rhs);
     }
 };
 
@@ -10,8 +10,12 @@ let result = add(1);
 \recurse_deep(n, max_depth) {
     if (n <= max_depth) {
         print(n);
-        recurse_deep(n + 1, max_depth)
+        return recurse_deep(n + 1, max_depth);
     }
 };
 
-recurse_deep(1, 500000);
+recurse_deep(1, 10000);
+
+while random() < 0.8 {
+    print(random())
+};

@@ -16,7 +16,6 @@ pub enum Value {
         defined_in_scope: u64,
     },
     NativeFunction {
-        num_params: usize,
         body: fn(&[Value]) -> Result<Value, InterpreterError>,
     },
 }
@@ -109,8 +108,8 @@ impl Display for Value {
             Value::Function { params, .. } => {
                 write!(f, "<function({})>", params.join(", "))
             }
-            Value::NativeFunction { num_params, .. } => {
-                write!(f, "<native function({})>", num_params)
+            Value::NativeFunction { .. }=> {
+                write!(f, "<native function(...)>")
             }
         }
     }

@@ -40,6 +40,7 @@ pub struct Interpreter {
     next_scope_id: u64,
     top_scope: u64,
     scopes: BTreeMap<u64, Scope>,
+
     ast: Ast,
 }
 
@@ -115,12 +116,22 @@ impl Interpreter {
             return None;
         }
 
+        let scope = self.scopes.remove(&id).unwrap();
+
         if let Some(parent_scope) = scope.parent_scope {
             let parent = self.scopes.get_mut(&parent_scope).unwrap();
             parent.reference_count -= 1;
         }
-
-        let scope = self.scopes.remove(&id).unwrap();
+        for value in scope.values.values() {
+            if let Value::Function { defined_in_scope, .. } = value {
+                if *defined_in_scope == id {
+                    continue;
+                }
+                let defined_in_scope = self.scopes.get_mut(defined_in_scope).unwrap();
+                defined_in_scope.reference_count -= 1;
+            }
+        }
+        
         self.top_scope = scope.parent_scope.unwrap_or(0);
 
         Some(scope)

@@ -22,7 +22,7 @@ impl Parser<'_> {
         }
 
         match self
-            .consume_lexeme_of_type(&[Token::Let, Token::Return, Token::Closure])
+            .consume_lexeme_of_type(&[Token::Let, Token::Return, Token::While, Token::Closure])
             .cloned()
         {
             Some(
@@ -60,6 +60,21 @@ impl Parser<'_> {
                 Ok(Statement {
                     span: return_lexeme.span.start..semicolon.span.end,
                     value: StatementType::Return { expr },
+                })
+            }
+            Some(
+                while_lexeme @ Lexeme {
+                    value: Token::While,
+                    ..
+                },
+            ) => {
+                let condition = self.parse_expr()?;
+                let body = self.parse_block()?;
+                let semicolon = parse_semicolon(self, while_lexeme.span.start..body.span.end)?;
+
+                Ok(Statement {
+                    span: while_lexeme.span.start..semicolon.span.end,
+                    value: StatementType::While { condition: Box::new(condition), body },
                 })
             }
             Some(
