@@ -16,6 +16,21 @@ let result = add(1);
 
 recurse_deep(1, 10000);
 
-while random() < 0.8 {
-    print(random())
+while random() < 0.95 {
+    print("hi")
 };
+
+\print_value_type(value) {
+    print(type_of(value))
+};
+
+print_value_type(recurse_deep);
+print_value_type(\() {});
+print_value_type("hi " + " there");
+print_value_type(1.0);
+print_value_type([1, 1, 1]);
+
+let user_id = 10;
+print("hi user " + to_string(user_id));
+
+print(range(-10, 10));

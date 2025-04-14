@@ -27,6 +27,7 @@ primary        → terminal
 primary        → "(" expression ")"
 primary        → block
 primary        → "\" "(" (IDENT ",")* ")" block
+primary        → "[" (expression)","* "]"
 
 call           → IDENT "(" (expression ",")* ")" 
 terminal       → NUMBER | STRING | "true" | "false" | "nil" | IDENT

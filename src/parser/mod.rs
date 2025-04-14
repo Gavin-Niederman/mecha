@@ -87,6 +87,7 @@ impl<'a> Parser<'a> {
         self.lexemes.get(self.location)
     }
     #[inline]
+    #[cfg(test)]
     fn consume_lexeme(&mut self) -> Option<&Lexeme> {
         self.skip_whitespace_lexemes();
         let lexeme = self.lexemes.get(self.location);
@@ -108,7 +109,7 @@ impl<'a> Parser<'a> {
             }
             Some(lexeme) => Err(ParseError::UnexpectedLexeme {
                 unexpected_lexeme: lexeme.clone(),
-                possible_tokens: vec![token],
+                possible_tokens: [token].into(),
             }),
             None => Err(ParseError::UnexpectedEndOfInput {
                 lexeme: self.lexemes[self.location - 1].clone(),
@@ -135,7 +136,7 @@ impl<'a> Parser<'a> {
             }
             Some(lexeme) => Err(ParseError::UnexpectedLexeme {
                 unexpected_lexeme: lexeme.clone(),
-                possible_tokens: allowed_tokens.to_vec(),
+                possible_tokens: allowed_tokens.into(),
             }),
             None => Err(ParseError::UnexpectedEndOfInput {
                 lexeme: self.lexemes[self.location - 1].clone(),
@@ -147,7 +148,7 @@ impl<'a> Parser<'a> {
 #[derive(Debug, Clone, PartialEq, Eq, Snafu)]
 pub enum ParseError {
     Multiple {
-        errors: Vec<ParseError>,
+        errors: Box<[ParseError]>,
     },
 
     #[snafu(display(
@@ -156,7 +157,7 @@ pub enum ParseError {
     ))]
     UnexpectedLexeme {
         unexpected_lexeme: Lexeme,
-        possible_tokens: Vec<Token>,
+        possible_tokens: Box<[Token]>,
     },
     #[snafu(display("Unexpected end of input after lexeme: {lexeme:?}"))]
     UnexpectedEndOfInput {

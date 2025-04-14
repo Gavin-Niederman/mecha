@@ -120,7 +120,7 @@ impl Parser<'_> {
         let Some(paren_open) = self.consume_lexeme_of_type(&[Token::LeftParen]).cloned() else {
             return Err(ParseError::UnexpectedLexeme {
                 unexpected_lexeme: self.lexemes[self.location].clone(),
-                possible_tokens: vec![Token::LeftParen],
+                possible_tokens: [Token::LeftParen].into(),
             });
         };
 
@@ -343,6 +343,33 @@ impl Parser<'_> {
                 ..
             }) => Ok(self.parse_block()?.into()),
             Some(
+                open_bracket @ Lexeme {
+                    value: Token::LeftBracket,
+                    ..
+                }
+            ) => {
+                self.advance_lexeme();
+
+                let mut items = vec![];
+                while let Ok(param) = self.parse_expr() {
+                    items.push(param);
+                    if self.consume_lexeme_of_type(&[Token::Comma]).is_none() {
+                        break;
+                    }
+                }
+
+                let close_bracket = self.consume_lexeme_of_type(&[Token::RightBracket])
+                    .ok_or_else(|| ParseError::UnclosedDelimiter {
+                        delimiter: Token::LeftBracket,
+                        start: open_bracket.clone(),
+                    })?;
+
+                Ok(Expr {
+                    span: open_bracket.span.start..close_bracket.span.end,
+                    value: ExprType::Array(items),
+                })
+            }
+            Some(
                 ident @ Lexeme {
                     value: Token::Identifier,
                     ..
@@ -416,19 +443,22 @@ impl Parser<'_> {
             Token::False => Terminal::Boolean(false),
             Token::Float => Terminal::Float(self.text[lexeme.span.clone()].parse().unwrap()),
             Token::Integer => Terminal::Integer(self.text[lexeme.span.clone()].parse().unwrap()),
+            Token::String => Terminal::String(self.text[lexeme.span.start + 1..lexeme.span.end - 1].to_string()),
             Token::Identifier => Terminal::Ident(Identifier {
                 ident: self.text[lexeme.span.clone()].to_string(),
             }),
             _ => {
                 return Err(ParseError::UnexpectedLexeme {
                     unexpected_lexeme: lexeme.clone(),
-                    possible_tokens: vec![
+                    possible_tokens: [
+                        Token::Nil,
                         Token::True,
                         Token::False,
                         Token::Float,
+                        Token::String,
                         Token::Integer,
-                        Token::Nil,
-                    ],
+                        Token::Identifier,
+                    ].into(),
                 });
             }
         };
@@ -445,7 +475,7 @@ impl Parser<'_> {
         let Some(paren_open) = self.consume_lexeme_of_type(&[Token::LeftParen]).cloned() else {
             return Err(ParseError::UnexpectedLexeme {
                 unexpected_lexeme: self.lexemes[self.location].clone(),
-                possible_tokens: vec![Token::LeftParen],
+                possible_tokens: [Token::LeftParen].into(),
             });
         };
 
@@ -505,7 +535,7 @@ impl Parser<'_> {
                             }
 
                             return Err(ParseError::Multiple {
-                                errors: vec![statement.unwrap_err(), expr.unwrap_err()],
+                                errors: [statement.unwrap_err(), expr.unwrap_err()].into(),
                             });
                         }
                     }
@@ -551,7 +581,7 @@ impl Parser<'_> {
             }
             Some(unexpected) => Err(ParseError::UnexpectedLexeme {
                 unexpected_lexeme: unexpected.clone(),
-                possible_tokens: vec![Token::LeftBrace],
+                possible_tokens: [Token::LeftBrace].into(),
             }),
             None => Err(ParseError::UnexpectedEndOfInput {
                 lexeme: self.lexemes[self.location - 1].clone(),

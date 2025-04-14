@@ -100,6 +100,8 @@ token_type! {
         Float,
         #[text = "INTEGER"]
         Integer,
+        #[text = "STRING"]
+        String,
 
         #[text = "'true'"]
         True,
@@ -116,6 +118,10 @@ token_type! {
         LeftBrace,
         #[text = "'}}'"]
         RightBrace,
+        #[text = "'['"]
+        LeftBracket,
+        #[text = "']'"]
+        RightBracket,
 
         // Delimiters
         #[text = "':'"]
@@ -230,6 +236,28 @@ impl Token {
                 consumed += Token::Integer.satisfied_by(&text[consumed..])?;
                 Some(consumed)
             }
+            Token::String => {
+                let mut escaped = false;
+
+                let '"' = text_iter.next().unwrap() else {
+                    return None;
+                };
+                consumed += 1;
+
+                for c in text_iter {
+                    if c == '"' && !escaped {
+                        consumed += 1;
+                        break;
+                    } else if c == '\\' {
+                        escaped = !escaped;
+                    } else {
+                        escaped = false;
+                    }
+                    consumed += 1;
+                }
+
+                if consumed > 0 { Some(consumed) } else { None }
+            }
 
             Token::True => {
                 keyword!("true" @ text_iter);
@@ -252,6 +280,12 @@ impl Token {
             }
             Token::RightBrace => {
                 char_token!('}' @ text_iter);
+            }
+            Token::LeftBracket => {
+                char_token!('[' @ text_iter);
+            }
+            Token::RightBracket => {
+                char_token!(']' @ text_iter);
             }
 
             Token::Colon => {

@@ -72,6 +72,7 @@ pub enum ExprType {
         params: Vec<Expr>
     },
     Terminal(Terminal),
+    Array(Vec<Expr>),
     Block(Block),
 }
 
@@ -81,6 +82,7 @@ pub enum Terminal {
     Boolean(bool),
     Float(f64),
     Integer(i64),
+    String(String),
     Closure {
         params: Vec<Spanned<Identifier>>,
         body: Spanned<Block>,

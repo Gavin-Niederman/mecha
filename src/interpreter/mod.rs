@@ -159,7 +159,7 @@ pub enum InterpreterError {
         "Required expression to evaluate to one of the types: {valid_types:?}, but it was {actual_type:?}."
     ))]
     InvalidType {
-        valid_types: Vec<ValueType>,
+        valid_types: Box<[ValueType]>,
         actual_type: ValueType,
         span: Span,
     },

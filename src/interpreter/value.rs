@@ -10,14 +10,17 @@ pub enum Value {
     Boolean(bool),
     Float(f64),
     Integer(i64),
+    Array(Vec<Value>),
+    String(String),
     Function {
-        params: Vec<String>,
+        params: Box<[String]>,
         body: Block,
         defined_in_scope: u64,
     },
     NativeFunction {
         body: fn(&[Value]) -> Result<Value, InterpreterError>,
     },
+    Type(ValueType),
 }
 impl Value {
     pub const fn value_type(&self) -> ValueType {
@@ -26,8 +29,11 @@ impl Value {
             Value::Boolean(_) => ValueType::Boolean,
             Value::Float(_) => ValueType::Float,
             Value::Integer(_) => ValueType::Integer,
+            Value::String(_) => ValueType::String,
+            Value::Array(_) => ValueType::Array,
             Value::Function { .. } => ValueType::Function,
             Value::NativeFunction { .. } => ValueType::Function,
+            Value::Type(_) => ValueType::Type,
         }
     }
 
@@ -41,7 +47,7 @@ impl Value {
             .contains(&value_type)
             .then_some(())
             .ok_or(InterpreterError::InvalidType {
-                valid_types: valid_types.to_vec(),
+                valid_types: valid_types.into(),
                 actual_type: value_type,
                 span,
             })
@@ -51,7 +57,7 @@ impl Value {
         match self {
             Value::Boolean(b) => Ok(*b),
             _ => Err(InterpreterError::InvalidType {
-                valid_types: vec![ValueType::Boolean],
+                valid_types: [ValueType::Boolean].into(),
                 actual_type: self.value_type(),
                 span,
             }),
@@ -61,7 +67,7 @@ impl Value {
         match self {
             Value::Float(b) => Ok(*b),
             _ => Err(InterpreterError::InvalidType {
-                valid_types: vec![ValueType::Float],
+                valid_types: [ValueType::Float].into(),
                 actual_type: self.value_type(),
                 span,
             }),
@@ -71,7 +77,7 @@ impl Value {
         match self {
             Value::Integer(b) => Ok(*b),
             _ => Err(InterpreterError::InvalidType {
-                valid_types: vec![ValueType::Integer],
+                valid_types: [ValueType::Integer].into(),
                 actual_type: self.value_type(),
                 span,
             }),
@@ -104,13 +110,25 @@ impl Display for Value {
             Value::Nil => write!(f, "nil"),
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Float(fl) => write!(f, "{}", fl),
+            Value::String(s) => f.write_str(s),
             Value::Integer(i) => write!(f, "{}", i),
+            Value::Array(arr) => {
+                write!(
+                    f,
+                    "[{}]",
+                    arr.iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
             Value::Function { params, .. } => {
                 write!(f, "<function({})>", params.join(", "))
             }
-            Value::NativeFunction { .. }=> {
+            Value::NativeFunction { .. } => {
                 write!(f, "<native function(...)>")
             }
+            Value::Type(t) => write!(f, "{:?}", t),
         }
     }
 }
@@ -152,5 +170,8 @@ pub enum ValueType {
     Boolean,
     Float,
     Integer,
+    String,
+    Array,
     Function,
+    Type,
 }

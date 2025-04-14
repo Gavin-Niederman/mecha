@@ -11,6 +11,7 @@ enum NodeType {
     BinaryOp { name: String },
     UnaryOp { name: String },
     Literal { value: String },
+    Array,
 
     Call,
     Block,
@@ -29,6 +30,7 @@ enum EdgeType {
     Cond,
     Body,
     Else,
+    Item,
     Expr,
     Param,
 
@@ -62,6 +64,7 @@ impl<'a> dot::Labeller<'a, Node, Edge> for Graph {
             NodeType::BinaryOp { ref name } => dot::LabelText::label(name.clone()),
             NodeType::UnaryOp { ref name } => dot::LabelText::label(name.clone()),
             NodeType::Literal { ref value } => dot::LabelText::label(value.clone()),
+            NodeType::Array => dot::LabelText::label("Array".to_string()),
             NodeType::Block => dot::LabelText::label("Block".to_string()),
             NodeType::Call => dot::LabelText::label("Call".to_string()),
         }
@@ -73,6 +76,7 @@ impl<'a> dot::Labeller<'a, Node, Edge> for Graph {
             EdgeType::Cond => dot::LabelText::label("cond"),
             EdgeType::Body => dot::LabelText::label("body"),
             EdgeType::Else => dot::LabelText::label("else"),
+            EdgeType::Item => dot::LabelText::label("item"),
             EdgeType::Expr => dot::LabelText::label("expr"),
             EdgeType::Param => dot::LabelText::label("param"),
             EdgeType::ContainedStatement => dot::LabelText::label("contained"),
@@ -201,6 +205,20 @@ fn build_graph(ast: Ast) -> Graph {
             ExprType::Terminal(terminal) => push_node(graph, NodeType::Literal {
                 value: format!("{:?}", terminal),
             }),
+            ExprType::Array(items) => {
+                let array_id = push_node(graph, NodeType::Array);
+
+                for item in items {
+                    let item_id = build_from_expr(graph, item);
+                    graph.edges.push(Edge {
+                        from: array_id,
+                        to: item_id,
+                        edge_type: EdgeType::Item,
+                    });
+                }
+
+                array_id
+            },
             ExprType::Block(Block { statements, ret }) => {
                 let block_id = push_node(graph, NodeType::Block);
                 for statement in statements {

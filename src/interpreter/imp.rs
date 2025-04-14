@@ -98,6 +98,10 @@ enum Frame {
 
     ApplyBinop(BinaryOperator),
     ApplyUnaryOp(UnaryOperator),
+    Array {
+        span: Span,
+        num_elements: usize,
+    },
 
     CallStart {
         num_args: usize,
@@ -117,7 +121,7 @@ enum Frame {
     },
     While {
         condition: Expr,
-        body: Spanned<Block>
+        body: Spanned<Block>,
     },
 
     DevalueExpr,
@@ -156,6 +160,9 @@ impl Interpreter {
                     Terminal::Integer(int) => {
                         value_stack.push(Value::Integer(int).spanned(span));
                     }
+                    Terminal::String(string) => {
+                        value_stack.push(Value::String(string).spanned(span));
+                    }
                     Terminal::Ident(ident) => {
                         value_stack
                             .push(super_scope.get(&ident.ident, span.clone())?.spanned(span));
@@ -178,6 +185,15 @@ impl Interpreter {
                             .reference_count += 1;
                     }
                 },
+                Frame::EvaluateExpr(Expr {
+                    span,
+                    value: ExprType::Array(items),
+                }) => {
+                    command_stack.push(Frame::Array { span, num_elements: items.len() });
+                    command_stack.extend(
+                        items.into_iter().map(Frame::EvaluateExpr),
+                    );
+                }
 
                 Frame::EvaluateExpr(Expr {
                     span,
@@ -312,7 +328,10 @@ impl Interpreter {
                         command_stack.push(Frame::EvaluateExpr(expr));
                     }
                     StatementType::While { condition, body } => {
-                        command_stack.push(Frame::While { condition: *condition.clone(), body: body.clone() });
+                        command_stack.push(Frame::While {
+                            condition: *condition.clone(),
+                            body: body.clone(),
+                        });
 
                         command_stack.push(Frame::EvaluateExpr(*condition));
                     }
@@ -382,12 +401,25 @@ impl Interpreter {
                     };
 
                     // Math ops
+                    if let BinaryOperator::Plus = binary_operator {
+                        if let (Value::String(l), Value::String(r)) = (&lhs.value, &rhs.value) {
+                            value_stack.push(Value::String(l.to_owned() + r)
+                                .spanned(lhs.span.start..rhs.span.start));
+                            continue;
+                        } else {
+                            check_values_valid_for_math(&lhs, &rhs)?;
+                            value_stack.push(apply_op_to_value!(@num lhs, rhs, |l, r| l + r));
+                            continue;
+                        }
+                    }
+
                     check_values_valid_for_math(&lhs, &rhs)?;
                     value_stack.push(match binary_operator {
                         BinaryOperator::Disjunction
                         | BinaryOperator::Conjunction
                         | BinaryOperator::Equal
-                        | BinaryOperator::NotEqual => {
+                        | BinaryOperator::NotEqual
+                        | BinaryOperator::Plus => {
                             unreachable!()
                         }
                         BinaryOperator::GreaterThan => {
@@ -402,9 +434,7 @@ impl Interpreter {
                         BinaryOperator::LessThanOrEqual => {
                             apply_op_to_value!(@bool lhs, rhs, |l, r| l <= r)
                         }
-                        BinaryOperator::Plus => {
-                            apply_op_to_value!(@num lhs, rhs, |l, r| l + r)
-                        }
+                        
                         BinaryOperator::Minus => {
                             apply_op_to_value!(@num lhs, rhs, |l, r| l - r)
                         }
@@ -560,8 +590,14 @@ impl Interpreter {
 
                         // Loop body and throw away the result of the block
                         command_stack.push(Frame::DevalueExpr);
-                        command_stack.push(Frame::EvaluateExpr(ExprType::Block(body.value).spanned(body.span)));
+                        command_stack.push(Frame::EvaluateExpr(
+                            ExprType::Block(body.value).spanned(body.span),
+                        ));
                     }
+                }
+                Frame::Array { span, num_elements } => {
+                    let elements = value_stack.drain(value_stack.len() - num_elements..).map(|element| element.value).collect::<Vec<_>>();
+                    value_stack.push(Value::Array(elements).spanned(span));
                 }
 
                 Frame::DevalueExpr => {

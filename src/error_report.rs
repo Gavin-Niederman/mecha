@@ -234,9 +234,12 @@ impl Display for ValueTypeDisplay {
         match self.0 {
             ValueType::Integer => write!(f, "integer"),
             ValueType::Float => write!(f, "float"),
+            ValueType::String => write!(f, "string"),
             ValueType::Boolean => write!(f, "boolean"),
             ValueType::Function => write!(f, "function"),
+            ValueType::Array => write!(f, "array"),
             ValueType::Nil => write!(f, "nil"),
+            ValueType::Type => write!(f, "string"),
         }
     }
 }
