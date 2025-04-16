@@ -14,7 +14,7 @@ let result = add(1);
     }
 };
 
-recurse_deep(1, 10000);
+recurse_deep(1, 100000);
 
 while random() < 0.95 {
     print("hi")
